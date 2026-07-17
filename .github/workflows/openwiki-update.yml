@@ -16,16 +16,25 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          run_install: false
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: pnpm
 
-      - name: Install OpenWiki
-        run: npm install --global openwiki
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build OpenWiki
+        run: pnpm run build
 
       - name: Run OpenWiki
-        run: openwiki code --update --print
+        run: node dist/cli.js code --update --print
         env:
           # claude-cli is fully keyless: spawns the operator's already
           # authenticated `claude` CLI on this self-hosted runner instead of
