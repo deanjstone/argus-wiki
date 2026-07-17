@@ -69,6 +69,7 @@ export type OpenWikiProvider =
   | "anthropic"
   | "baseten"
   | "bedrock"
+  | "claude-cli"
   | "fireworks"
   | "gemini"
   | "gemini-enterprise"
@@ -198,6 +199,15 @@ export const PROVIDER_CONFIGS: Record<OpenWikiProvider, ProviderConfig> = {
       { id: "zai-org/GLM-5.2", label: "GLM 5.2" },
       { id: "moonshotai/Kimi-K2.7-Code", label: "Kimi K2.7 Code" },
     ],
+  },
+  "claude-cli": {
+    // Fully keyless: spawns the operator's already-authenticated `claude` CLI
+    // binary as a subprocess instead of calling a hosted API. Opt-in only via
+    // OPENWIKI_PROVIDER=claude-cli — deliberately excluded from
+    // SELECTABLE_OPENWIKI_PROVIDERS since there is no key/OAuth setup step to
+    // walk a user through in interactive onboarding.
+    label: "Claude Code CLI",
+    modelOptions: [],
   },
   bedrock: {
     apiKeyEnvKey: BEDROCK_AWS_ACCESS_KEY_ID_ENV_KEY,
