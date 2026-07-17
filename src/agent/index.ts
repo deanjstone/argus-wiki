@@ -26,6 +26,7 @@ import { SECRET_KEY_PATTERN_SOURCE } from "../diagnostics.js";
 import { openWikiLocalWikiDir, openWikiSkillsDir } from "../openwiki-home.js";
 import { OpenWikiLocalShellBackend } from "./docs-only-backend.js";
 import { createOpenWikiIndexMiddleware } from "./index-middleware.js";
+import { runClaudeCliAgent } from "./claude-cli/claude-cli-backend.js";
 import {
   CODEX_ORIGINATOR,
   CODEX_RESPONSES_BASE_URL,
@@ -150,8 +151,20 @@ export async function runOpenWikiAgent(
 
   try {
     provider = resolveConfiguredProvider();
-    const providerBaseUrl = resolveProviderBaseUrl(provider);
     emitDebug(options, `provider=${provider}`);
+
+    if (provider === "claude-cli") {
+      const result = await runClaudeCliAgent(command, runtimeCwd, options);
+
+      await recordRunSafe(command, options, {
+        provider,
+        outcome: "success",
+      });
+
+      return result;
+    }
+
+    const providerBaseUrl = resolveProviderBaseUrl(provider);
     if (providerBaseUrl) {
       emitDebug(options, `provider.baseUrl=${JSON.stringify(providerBaseUrl)}`);
     }
