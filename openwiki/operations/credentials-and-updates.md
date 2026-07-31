@@ -29,12 +29,14 @@ native dependency build begins.
 
 `src/env.ts` manages a private environment file under the user's home directory:
 
-- directory: `~/.openwiki` (mode `0o700`)
-- file: `~/.openwiki/.env` (mode `0o600`)
+- directory: `~/.openwiki` (mode `0o700`) — overridable by setting `OPENWIKI_HOME` before OpenWiki starts, which also relocates the connectors/wiki/skills subdirectories (`src/openwiki-home.ts`) and the credentials file below it
+- file: `~/.openwiki/.env` (mode `0o600`), or `$OPENWIKI_HOME/.env` when `OPENWIKI_HOME` is set
+
+The `openwiki/` documentation output directory in the target repository is similarly overridable via `OPENWIKI_OUTPUT_DIR` (`OPEN_WIKI_DIR` in `src/constants.ts`, defaults to `openwiki`); this also moves where `.last-update.json` is read and written. Both overrides exist so this directory layout can be repointed at a different location without patching source, while defaulting to upstream's original paths when unset.
 
 The file stores provider configuration and API keys:
 
-- `OPENWIKI_PROVIDER` — the selected model provider
+- `OPENWIKI_PROVIDER` — the selected model provider (the `claude-cli` provider stores nothing here — it is keyless and reuses the operator's already-authenticated `claude` CLI; see [CLI usage: Claude Code CLI provider](../cli/usage.md#claude-code-cli-provider))
 - `OPENWIKI_MODEL_ID` — the default model ID
 - `OPENWIKI_PROVIDER_RETRY_ATTEMPTS` — optional positive integer retry count for transient provider request failures; defaults to 3 when unset
 - Provider API keys: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`, `ANTHROPIC_API_KEY`, `BASETEN_API_KEY`, `FIREWORKS_API_KEY`
@@ -233,6 +235,7 @@ Bitbucket users should configure repository variables for the model provider key
 ## Source map
 
 - `src/env.ts`
+- `src/openwiki-home.ts`
 - `src/credentials.tsx`
 - `src/constants.ts`
 - `src/agent/utils.ts`

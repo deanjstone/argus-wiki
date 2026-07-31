@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-07-17T08:46:18.705Z",
+  "updatedAt": "2026-07-31T06:19:46.458Z",
   "command": "update",
-  "gitHead": "d4e94ab513ab13908c6b61346b23dc17bbd59b1f",
-  "model": "z-ai/glm-5.2"
+  "gitHead": "45a5a4fef255cf45a26021e1dfb5e63b8570c2c2",
+  "model": "claude-haiku-4-5-20251001"
 }
