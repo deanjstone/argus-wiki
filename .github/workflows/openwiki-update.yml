@@ -15,6 +15,15 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          # This runner is self-hosted with a persistent, git-tracked
+          # ~/.gitconfig (symlinked into deanjstone/argus-config). checkout's
+          # default safe.directory write is unconditional (git config
+          # --global --add on every run, no existence check), so it
+          # duplicates a line in that tracked file on every scheduled run.
+          # A one-time `git config --global --add safe.directory '*'` on the
+          # runner already covers this repo, so disable the per-run write.
+          set-safe-directory: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
