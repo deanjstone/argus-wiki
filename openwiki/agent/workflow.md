@@ -26,6 +26,8 @@ The documentation agent is implemented in `src/agent/`. It takes a command (`cha
 
 Chat runs skip metadata writes entirely.
 
+This sequence applies to every provider except `claude-cli`: when `OPENWIKI_PROVIDER=claude-cli`, `src/agent/index.ts` branches to `runClaudeCliAgent()` right after resolving the provider, skipping model creation and the DeepAgents backend entirely. See [Claude Code CLI provider](#claude-code-cli-provider) below.
+
 ## Provider-specific model creation
 
 `createModel()` in `src/agent/index.ts` branches by provider:
@@ -39,6 +41,16 @@ Chat runs skip metadata writes entirely.
 Base URLs are resolved through `resolveProviderBaseUrl()` in `src/constants.ts`, which prefers a provider's alternative base URL environment variable (`baseUrlEnvKey`) over the built-in default before falling back to the SDK's own default endpoint. Providers marked `requiresBaseUrl` are validated at startup by `ensureProviderBaseUrl()`.
 
 Provider retry attempts are resolved through `resolveProviderRetryAttempts()` and passed to the LangChain model client's `maxRetries` option. The value is the number of retries after the first provider request; unset values default to 3 retries.
+
+## Claude Code CLI provider
+
+`OPENWIKI_PROVIDER=claude-cli` runs an entirely separate path implemented in `src/agent/claude-cli/`, not a `createModel()` branch:
+
+- `claude-cli-backend.ts` (`runClaudeCliAgent()`) spawns the operator's already-authenticated `claude` CLI binary as a subprocess (`spawn("claude", [...])`) with `--output-format json`, `--permission-mode acceptEdits`, and a `--system-prompt`/user prompt built by the dedicated prompt module, reusing the same run-context, content-snapshot, and metadata bookkeeping (`persistRunMetadataIfChanged`) as the DeepAgents-based providers.
+- `prompt.ts` (`createClaudeCliSystemPrompt`/`createClaudeCliUserPrompt`) mirrors the product rules in `src/agent/prompt.ts` but targets the spawned CLI's own native tools (Read/Write/Edit/Bash/Grep/Glob) operating on real filesystem paths, not DeepAgents' virtual filesystem. It has no connector tools available.
+- Because this path bypasses `OpenWikiLocalShellBackend` entirely, the docs-only write restriction is re-enforced out of band: a temporary `--settings` file registers a `PreToolUse` hook (`write-guard-hook.ts`) matching `Write|Edit` calls, backed by pure path-decision logic in `write-guard.ts` (`evaluateWritePath()`) that refuses writes outside the repository root or outside the configured `openwiki/`-relative directory.
+- It is keyless — there is no API key or OAuth step, so it is deliberately excluded from `SELECTABLE_OPENWIKI_PROVIDERS` and only reachable by explicitly setting `OPENWIKI_PROVIDER=claude-cli`. It requires the `claude` CLI to be installed and already authenticated in the run environment (for example a self-hosted CI runner under an operator's account).
+- v1 scope only supports `repository` output mode; passing `local-wiki` output mode throws.
 
 ## Prompting strategy
 
@@ -141,6 +153,10 @@ The agent is not just a generic chat wrapper. It is intentionally constrained so
 - `src/agent/types.ts`
 - `src/agent/docs-only-backend.ts`
 - `src/agent/openai-chatgpt-oauth.ts`
+- `src/agent/claude-cli/claude-cli-backend.ts`
+- `src/agent/claude-cli/prompt.ts`
+- `src/agent/claude-cli/write-guard.ts`
+- `src/agent/claude-cli/write-guard-hook.ts`
 - `src/constants.ts`
 - `src/env.ts`
-- Git evidence: commits `ceded10`, `f89b05d`, `dfa73cc`, `a82759f`, `0fa1430`
+- Git evidence: commits `ceded10`, `f89b05d`, `dfa73cc`, `a82759f`, `0fa1430`, `070a382`, `5210cc4`

@@ -39,6 +39,7 @@ OpenWiki is a TypeScript CLI that writes and maintains documentation for a repos
 - `src/agent/types.ts` — shared agent types (`OpenWikiCommand`, `RunContext`, `UpdateMetadata`, run options/events).
 - `src/agent/docs-only-backend.ts` — `OpenWikiLocalShellBackend`, extends DeepAgents `LocalShellBackend` with docs-only write guards and output-mode awareness.
 - `src/agent/openai-chatgpt-oauth.ts` — ChatGPT OAuth flow, token persistence, and refresh logic for the `openai-chatgpt` provider.
+- `src/agent/claude-cli/` — keyless `claude-cli` provider backend: spawns the operator's authenticated `claude` CLI as a subprocess instead of calling a hosted API, with its own prompt builder and an out-of-band `PreToolUse` write guard. See [Agent workflow](./agent/workflow.md#claude-code-cli-provider).
 - `src/auth/oauth.ts` — generic OAuth runner for connector providers (Gmail, Notion, Slack, X).
 - `src/auth/providers.ts` — connector OAuth provider configs (scopes, token URLs, env-key mappings).
 - `src/auth/configure.ts` — `openwiki auth configure <provider>` flow for creating local connector configs.
@@ -47,7 +48,7 @@ OpenWiki is a TypeScript CLI that writes and maintains documentation for a repos
 - `src/connectors/` — connector registry, MCP client/runtime, source-specific ingestion (git-repo, gmail, hackernews, slack, web-search, x), and tool definitions.
 - `src/ingestion.ts` — orchestrates source ingestion runs across configured connectors.
 - `src/code-mode.ts` — `openwiki code` setup: writes GitHub Actions workflow and AGENTS.md/CLAUDE.md snippets.
-- `src/env.ts` — `~/.openwiki/.env` persistence and credential diagnostics.
+- `src/env.ts` — `~/.openwiki/.env` persistence and credential diagnostics; base directory is overridable via `OPENWIKI_HOME`.
 - `src/credentials.tsx` — interactive onboarding flow for provider selection, API keys, and model selection.
 - `src/constants.ts` — provider configs, model options, env keys, and validation helpers.
 - `examples/openwiki-update.yml` — GitHub Actions scheduled automation example.
@@ -81,6 +82,10 @@ OpenWiki is a TypeScript CLI that writes and maintains documentation for a repos
 - `src/agent/types.ts`
 - `src/agent/docs-only-backend.ts`
 - `src/agent/openai-chatgpt-oauth.ts`
+- `src/agent/claude-cli/claude-cli-backend.ts`
+- `src/agent/claude-cli/prompt.ts`
+- `src/agent/claude-cli/write-guard.ts`
+- `src/agent/claude-cli/write-guard-hook.ts`
 - `src/auth/oauth.ts`
 - `src/auth/providers.ts`
 - `src/auth/configure.ts`
@@ -103,9 +108,10 @@ OpenWiki is a TypeScript CLI that writes and maintains documentation for a repos
 - `src/ingestion.ts`
 - `src/code-mode.ts`
 - `src/env.ts`
+- `src/openwiki-home.ts`
 - `src/credentials.tsx`
 - `src/constants.ts`
 - `examples/openwiki-update.yml`
 - `examples/openwiki-update.gitlab-ci.yml`
 - `examples/openwiki-update.bitbucket-pipelines.yml`
-- Git evidence: commits `ceded10`, `f89b05d`, `a82759f`, `dfa73cc`, `fd3a702`, `8278c36`, `0fa1430`
+- Git evidence: commits `ceded10`, `f89b05d`, `a82759f`, `dfa73cc`, `fd3a702`, `8278c36`, `0fa1430`, `070a382`, `5210cc4`, `9f2c252`, `7c3d1df`

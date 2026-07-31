@@ -59,6 +59,7 @@ Model creation branches by provider in `src/agent/index.ts` (`createModel`):
 - **openrouter** → `ChatOpenRouter` with the selected model ID.
 - **openai** → `ChatOpenAI` with `useResponsesApi: true`.
 - **baseten / fireworks / nvidia / openai-compatible** → `ChatOpenAI` with the provider's API key and optional custom `baseURL` from `PROVIDER_CONFIGS`.
+- **claude-cli** → does not use `createModel`/DeepAgents at all. `src/agent/index.ts` branches to `runClaudeCliAgent()` (`src/agent/claude-cli/claude-cli-backend.ts`) before model creation, spawning the operator's already-authenticated `claude` CLI binary as a subprocess. It has its own prompt builder (`src/agent/claude-cli/prompt.ts`) and re-enforces the docs-only write restriction via a `PreToolUse` hook (`write-guard-hook.ts` / `write-guard.ts`) instead of `OpenWikiLocalShellBackend`, since this path bypasses DeepAgents entirely. It is keyless (no API key/OAuth) and deliberately excluded from `SELECTABLE_OPENWIKI_PROVIDERS` — opt-in only via `OPENWIKI_PROVIDER=claude-cli` — and v1 supports only `repository` output mode. See [Agent workflow](../agent/workflow.md) for the full flow.
 
 Credential gating before model creation uses `getMissingProviderEnvKey()` in `src/constants.ts`, which requires the provider's API key — or `GOOGLE_CLOUD_PROJECT` for vertex — and powers the same check in the CLI's non-interactive gates and the onboarding flow.
 
@@ -115,6 +116,10 @@ The current design reflects a documentation product rather than a general-purpos
 - `src/agent/types.ts`
 - `src/agent/docs-only-backend.ts`
 - `src/agent/openai-chatgpt-oauth.ts`
+- `src/agent/claude-cli/claude-cli-backend.ts`
+- `src/agent/claude-cli/prompt.ts`
+- `src/agent/claude-cli/write-guard.ts`
+- `src/agent/claude-cli/write-guard-hook.ts`
 - `src/auth/oauth.ts`
 - `src/auth/providers.ts`
 - `src/auth/configure.ts`

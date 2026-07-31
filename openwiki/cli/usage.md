@@ -64,7 +64,7 @@ The UI persists provider and model selection back to `~/.openwiki/.env` through 
 
 The first interactive run can prompt for:
 
-- a **provider** (`OPENWIKI_PROVIDER`) — openai, openai-chatgpt, openrouter, baseten, fireworks, nvidia, openai-compatible, anthropic, or vertex,
+- a **provider** (`OPENWIKI_PROVIDER`) — openai, openai-chatgpt, openrouter, baseten, fireworks, nvidia, openai-compatible, anthropic, or vertex (the `claude-cli` provider is keyless and deliberately excluded from this interactive list — see [Claude Code CLI provider](#claude-code-cli-provider) below),
 - the **provider API key** (e.g. `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`, `ANTHROPIC_API_KEY`, `BASETEN_API_KEY`, `FIREWORKS_API_KEY`) — skipped for the vertex provider, which instead prompts for a **GCP project** (`GOOGLE_CLOUD_PROJECT`, required) and a **GCP location** (`GOOGLE_CLOUD_LOCATION`, optional, defaults to `global`),
 - a **base URL** for providers that require one (the openai-compatible provider prompts for `OPENAI_COMPATIBLE_BASE_URL`),
 - a **model ID** stored as `OPENWIKI_MODEL_ID` — chosen from the provider's model list or a custom ID,
@@ -90,7 +90,11 @@ Providers and their model options are defined in `PROVIDER_CONFIGS` in `src/cons
 | anthropic         | `ANTHROPIC_API_KEY`                                 | (default, or `ANTHROPIC_BASE_URL`)             | Haiku, Sonnet, Opus                                                   |
 | vertex            | none (Google ADC) — `GOOGLE_CLOUD_PROJECT` required | per `GOOGLE_CLOUD_LOCATION` (default `global`) | Haiku, Sonnet, Opus (Claude on Vertex AI)                             |
 
-The default provider is `openai`, and the default model is `gpt-5.6-terra`. `resolveConfiguredProvider()` picks the provider from `OPENWIKI_PROVIDER`, then falls back to the first configured provider API key in this order: OpenAI, OpenAI-compatible, OpenRouter, Anthropic, Baseten, Fireworks, NVIDIA, and finally `DEFAULT_PROVIDER`.
+The default provider is `openai`, and the default model is `gpt-5.6-terra`. `resolveConfiguredProvider()` picks the provider from `OPENWIKI_PROVIDER`, then falls back to the first configured provider API key in this order: OpenAI, OpenAI-compatible, OpenRouter, Anthropic, Baseten, Fireworks, NVIDIA, and finally `DEFAULT_PROVIDER`. `claude-cli` is never picked by this fallback order — it only runs when `OPENWIKI_PROVIDER=claude-cli` is set explicitly.
+
+### Claude Code CLI provider
+
+Setting `OPENWIKI_PROVIDER=claude-cli` runs OpenWiki against the operator's own already-authenticated `claude` CLI binary as a subprocess instead of calling a hosted API. There is no API key, base URL, or model list to configure — `OPENWIKI_MODEL_ID`, if set, is passed through to `claude --model`. It requires the `claude` CLI to be installed and signed in on the machine running OpenWiki, which makes it a good fit for a self-hosted CI runner under an operator's account rather than the interactive onboarding flow. It only supports `repository` output mode. See [Agent workflow: Claude Code CLI provider](../agent/workflow.md#claude-code-cli-provider) for the execution details, including how the docs-only write restriction is enforced for this path.
 
 ### Provider retry attempts
 
