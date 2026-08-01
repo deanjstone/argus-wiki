@@ -10,12 +10,12 @@ Light-touch fork of [langchain-ai/openwiki](https://github.com/langchain-ai/open
 ## Local divergence from upstream
 
 - `src/constants.ts` / `src/openwiki-home.ts` — `OPEN_WIKI_DIR` and `openWikiHomeDir` are env-overridable (`OPENWIKI_OUTPUT_DIR`, `OPENWIKI_HOME`), defaulting to upstream's original paths when unset. Kept small to stay low-conflict against future upstream merges.
+- `src/constants.ts` — `OPENWIKI_TELEMETRY_DISABLED` defaults to `"1"` (upstream defaults it unset/telemetry-on) since this fork processes personal vault content. Set `OPENWIKI_TELEMETRY_DISABLED=0` explicitly to re-enable.
 
 ## Not yet done
 
-- Wire `OPENWIKI_HOME`/`OPENWIKI_OUTPUT_DIR` at CONTEXT/CORTEX and validate a real run.
-- Structural-vs-routine-write split in the scheduled update → PR workflow (`examples/openwiki-update.yml`, `src/code-mode.ts`) — upstream treats all doc changes as PR-worthy; this fork needs an additive rule so only structural changes go through review.
-- Disable telemetry by default (`OPENWIKI_TELEMETRY_DISABLED=1`) given vault content is personal.
+- Structural-vs-routine-write split in the scheduled update → PR workflow (`examples/openwiki-update.yml`, `src/code-mode.ts`) — decision locked (see `deanjstone/argus-wiki#9`); implementation tracked in `deanjstone/argus-wiki#17`.
+- Full `OPENWIKI_HOME`/`OPENWIKI_OUTPUT_DIR` wiring against the real CONTEXT/CORTEX vaults — plumbing validated in a throwaway dry-run (`deanjstone/argus-wiki#8`); an end-to-end run against the real vaults is governed by `deanjstone/context#3`, not this repo.
 
 ---
 

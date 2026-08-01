@@ -1,5 +1,12 @@
 export const OPEN_WIKI_DIR = process.env.OPENWIKI_OUTPUT_DIR ?? "openwiki";
 export const UPDATE_METADATA_PATH = `${OPEN_WIKI_DIR}/.last-update.json`;
+
+// Fork default: this fork's OpenWiki processes personal vault content
+// (CONTEXT/CORTEX), so telemetry is opt-in rather than opt-out. Set
+// OPENWIKI_TELEMETRY_DISABLED=0 explicitly to re-enable it.
+if (process.env.OPENWIKI_TELEMETRY_DISABLED === undefined) {
+  process.env.OPENWIKI_TELEMETRY_DISABLED = "1";
+}
 export const BASETEN_API_KEY_ENV_KEY = "BASETEN_API_KEY";
 export const FIREWORKS_API_KEY_ENV_KEY = "FIREWORKS_API_KEY";
 export const NEBIUS_API_KEY_ENV_KEY = "NEBIUS_API_KEY";
