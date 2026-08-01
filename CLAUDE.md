@@ -14,8 +14,7 @@ Light-touch fork of [langchain-ai/openwiki](https://github.com/langchain-ai/open
 
 ## Not yet done
 
-- Structural-vs-routine-write split in the scheduled update → PR workflow (`examples/openwiki-update.yml`, `src/code-mode.ts`) — decision locked (see `deanjstone/argus-wiki#9`); implementation tracked in `deanjstone/argus-wiki#17`.
-- Full `OPENWIKI_HOME`/`OPENWIKI_OUTPUT_DIR` wiring against the real CONTEXT/CORTEX vaults — plumbing validated in a throwaway dry-run (`deanjstone/argus-wiki#8`); an end-to-end run against the real vaults is governed by `deanjstone/context#3`, not this repo.
+All forkpoint items tracked by [wayfinder map #15](https://github.com/deanjstone/argus-wiki/issues/15) are resolved — structural/routine auto-merge is implemented and validated end-to-end (`deanjstone/argus-wiki#17`), and `OPENWIKI_HOME`/`OPENWIKI_OUTPUT_DIR` plumbing is validated (`deanjstone/argus-wiki#8`; an end-to-end run against the real vaults remains governed by `deanjstone/context#3`, not this repo).
 
 ---
 
