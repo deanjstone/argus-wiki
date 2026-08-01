@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -118,5 +118,34 @@ describe("ensureCodeModeRepoSetup workflow", () => {
     ]) {
       expect(workflow).toContain(managedPath);
     }
+  });
+
+  test("creates the workflow file when missing", async () => {
+    const repo = await createTempRepo();
+
+    await ensureCodeModeRepoSetup(repo);
+
+    const workflow = await readIfPresent(
+      path.join(repo, ".github", "workflows", "openwiki-update.yml"),
+    );
+    expect(workflow).not.toBeNull();
+  });
+
+  test("does not overwrite an already-customized workflow file", async () => {
+    const repo = await createTempRepo();
+    const workflowPath = path.join(
+      repo,
+      ".github",
+      "workflows",
+      "openwiki-update.yml",
+    );
+    const customized = "name: Custom OpenWiki Update\nruns-on: [self-hosted]\n";
+    await mkdir(path.dirname(workflowPath), { recursive: true });
+    await writeFile(workflowPath, customized, "utf8");
+
+    await ensureCodeModeRepoSetup(repo);
+
+    const workflow = await readIfPresent(workflowPath);
+    expect(workflow).toEqual(customized);
   });
 });
