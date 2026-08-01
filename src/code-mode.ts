@@ -18,6 +18,10 @@ export async function ensureCodeModeRepoSetup(
   await writeCodeModeAgentSnippets(cwd);
 }
 
+// Created once, then left alone: once a repo has its own
+// .github/workflows/openwiki-update.yml, it's operator-owned config (runner,
+// provider, build steps), not a tool-managed output the generator should
+// keep overwriting on every run.
 async function writeCodeModeWorkflow(
   cwd: string,
   cronExpression: string,
@@ -28,8 +32,25 @@ async function writeCodeModeWorkflow(
     "workflows",
     "openwiki-update.yml",
   );
+
+  if (await fileExists(workflowPath)) {
+    return;
+  }
+
   await mkdir(path.dirname(workflowPath), { recursive: true });
   await writeFile(workflowPath, createCodeModeWorkflow(cronExpression), "utf8");
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await readFile(filePath, "utf8");
+    return true;
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 async function writeCodeModeAgentSnippets(cwd: string): Promise<void> {
