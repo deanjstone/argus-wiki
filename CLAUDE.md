@@ -5,7 +5,7 @@ Light-touch fork of [langchain-ai/openwiki](https://github.com/langchain-ai/open
 ## Remotes
 
 - `origin` → `deanjstone/argus-wiki` (this fork)
-- `upstream` → `langchain-ai/openwiki` (pull periodically: `git fetch upstream && git merge upstream/main`)
+- `upstream` → `langchain-ai/openwiki` — **hard fork**: `upstream` is kept but pulled only **on-demand** (e.g. a specific security fix worth cherry-picking), never routinely, and never `git merge upstream/main` as a matter of course. This fork has no obligation to track upstream releases and never contributes fixes back to `langchain-ai/openwiki`, even when generic. Full rationale locked in [wayfinder map #15](https://github.com/deanjstone/argus-wiki/issues/15).
 
 ## Local divergence from upstream
 
