@@ -148,4 +148,22 @@ describe("ensureCodeModeRepoSetup workflow", () => {
     const workflow = await readIfPresent(workflowPath);
     expect(workflow).toEqual(customized);
   });
+
+  test("classifies structural vs. routine updates and auto-merges routine ones", async () => {
+    const repo = await createTempRepo();
+
+    await ensureCodeModeRepoSetup(repo);
+
+    const workflow = await readIfPresent(
+      path.join(repo, ".github", "workflows", "openwiki-update.yml"),
+    );
+    expect(workflow).toContain("Classify update as structural or routine");
+    expect(workflow).toContain("classification=structural");
+    expect(workflow).toContain("classification=routine");
+    expect(workflow).toContain("gh pr merge --auto --squash");
+    // The workflow file itself must never be silently auto-merged.
+    expect(workflow).toMatch(
+      /workflows\/openwiki-update\.yml[\s\S]*classification=structural/,
+    );
+  });
 });
