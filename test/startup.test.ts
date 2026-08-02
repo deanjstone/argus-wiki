@@ -3,13 +3,11 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import { resolveStartupCommand } from "../src/startup.ts";
 import type { CliCommand } from "../src/commands.ts";
 
 const execFileAsync = promisify(execFile);
-const originalProvider = process.env.OPENWIKI_PROVIDER;
-const originalOpenRouterKey = process.env.OPENROUTER_API_KEY;
 
 async function git(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("git", args, { cwd });
@@ -63,20 +61,6 @@ function updatePrintCommand(
   };
 }
 
-beforeEach(() => {
-  process.env.OPENWIKI_PROVIDER = "openrouter";
-  delete process.env.OPENROUTER_API_KEY;
-});
-
-afterEach(() => {
-  if (originalProvider === undefined) delete process.env.OPENWIKI_PROVIDER;
-  else process.env.OPENWIKI_PROVIDER = originalProvider;
-
-  if (originalOpenRouterKey === undefined)
-    delete process.env.OPENROUTER_API_KEY;
-  else process.env.OPENROUTER_API_KEY = originalOpenRouterKey;
-});
-
 describe("resolveStartupCommand", () => {
   test("fails fast for non-TTY interactive chat without a message", async () => {
     const result = await resolveStartupCommand(
@@ -113,7 +97,15 @@ describe("resolveStartupCommand", () => {
     expect(result).toBe(command);
   });
 
-  test("still requires credentials when update --print has source changes", async () => {
+  // Note: claude-cli (the sole remaining provider) is fully keyless — it
+  // spawns the operator's already-authenticated `claude` CLI instead of
+  // calling a hosted API — so there is no longer a reachable scenario where
+  // resolveStartupCommand fails with a missing-credential error. The former
+  // "still requires credentials when ..." tests here (pinned to
+  // OPENROUTER_API_KEY) were removed as a necessary consequence of narrowing
+  // OpenWikiProvider to "claude-cli" only.
+
+  test("runs update --print with source changes (claude-cli needs no credentials)", async () => {
     const repo = await createRepoWithOpenWiki();
     const head = await git(repo, ["rev-parse", "HEAD"]);
     await writeLastUpdate(repo, head);
@@ -123,33 +115,26 @@ describe("resolveStartupCommand", () => {
       "utf8",
     );
 
-    const result = await resolveStartupCommand(updatePrintCommand(), {
+    const command = updatePrintCommand();
+    const result = await resolveStartupCommand(command, {
       cwd: repo,
       isStdinTTY: false,
     });
 
-    expect(result.kind).toBe("error");
-    if (result.kind === "error") {
-      expect(result.message).toContain("OPENROUTER_API_KEY is required");
-    }
+    expect(result).toBe(command);
   });
 
-  test("still requires credentials when an update message is supplied", async () => {
+  test("runs update --print with a user message (claude-cli needs no credentials)", async () => {
     const repo = await createRepoWithOpenWiki();
     const head = await git(repo, ["rev-parse", "HEAD"]);
     await writeLastUpdate(repo, head);
 
-    const result = await resolveStartupCommand(
-      updatePrintCommand({ userMessage: "refresh API docs" }),
-      {
-        cwd: repo,
-        isStdinTTY: false,
-      },
-    );
+    const command = updatePrintCommand({ userMessage: "refresh API docs" });
+    const result = await resolveStartupCommand(command, {
+      cwd: repo,
+      isStdinTTY: false,
+    });
 
-    expect(result.kind).toBe("error");
-    if (result.kind === "error") {
-      expect(result.message).toContain("OPENROUTER_API_KEY is required");
-    }
+    expect(result).toBe(command);
   });
 });

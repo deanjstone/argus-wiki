@@ -1,9 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
   DEFAULT_MODEL_ID,
-  DEFAULT_PROVIDER_RETRY_ATTEMPTS,
   DEFAULT_PROVIDER,
-  DEFAULT_VERTEX_LOCATION,
+  DEFAULT_PROVIDER_RETRY_ATTEMPTS,
   getDefaultModelId,
   getMissingProviderEnvKey,
   getProviderApiKeyEnvKey,
@@ -13,7 +12,6 @@ import {
   isValidBaseUrl,
   isValidModelId,
   isValidProvider,
-  NEBIUS_BASE_URL,
   normalizeModelId,
   normalizeProvider,
   providerRequiresApiKey,
@@ -46,7 +44,7 @@ describe("isValidModelId", () => {
     expect(isValidModelId("http://evil.example/model")).toBe(false);
   });
 
-  test("accepts @-versioned Vertex AI model ids", () => {
+  test("accepts @-versioned model ids", () => {
     expect(isValidModelId("claude-haiku-4-5@20251001")).toBe(true);
   });
 
@@ -62,68 +60,29 @@ describe("isValidModelId", () => {
 });
 
 describe("normalizeProvider / isValidProvider", () => {
-  test("normalizes case and whitespace to a known provider", () => {
-    expect(normalizeProvider("  Anthropic ")).toBe("anthropic");
-    expect(normalizeProvider("OPENROUTER")).toBe("openrouter");
-    expect(normalizeProvider(" Nebius ")).toBe("nebius");
-    expect(normalizeProvider(" Gemini-Enterprise ")).toBe("gemini-enterprise");
+  test("normalizes case and whitespace to the known provider", () => {
+    expect(normalizeProvider("  Claude-Cli ")).toBe("claude-cli");
+    expect(normalizeProvider("CLAUDE-CLI")).toBe("claude-cli");
   });
 
   test("returns null for unknown or nullish providers", () => {
     expect(normalizeProvider("bogus")).toBeNull();
+    expect(normalizeProvider("anthropic")).toBeNull();
     expect(normalizeProvider(null)).toBeNull();
     expect(normalizeProvider(undefined)).toBeNull();
   });
 
   test("isValidProvider is a type guard over the known set", () => {
-    expect(isValidProvider("anthropic")).toBe(true);
-    expect(isValidProvider("nebius")).toBe(true);
-    expect(isValidProvider("openai-compatible")).toBe(true);
-    expect(isValidProvider("nvidia")).toBe(true);
-    expect(isValidProvider("gemini")).toBe(true);
-    expect(isValidProvider("gemini-enterprise")).toBe(true);
+    expect(isValidProvider("claude-cli")).toBe(true);
+    expect(isValidProvider("anthropic")).toBe(false);
     expect(isValidProvider("nope")).toBe(false);
   });
 });
 
 describe("resolveConfiguredProvider", () => {
   test("honors an explicit OPENWIKI_PROVIDER", () => {
-    expect(resolveConfiguredProvider({ OPENWIKI_PROVIDER: "anthropic" })).toBe(
-      "anthropic",
-    );
-  });
-
-  test("honors an explicit gemini / gemini-enterprise provider", () => {
-    expect(resolveConfiguredProvider({ OPENWIKI_PROVIDER: "gemini" })).toBe(
-      "gemini",
-    );
-    expect(
-      resolveConfiguredProvider({ OPENWIKI_PROVIDER: "gemini-enterprise" }),
-    ).toBe("gemini-enterprise");
-  });
-
-  test("does NOT auto-select gemini from GEMINI_API_KEY alone", () => {
-    // The Google providers are explicit-only (like the removed vertex provider);
-    // a bare GEMINI_API_KEY falls through to the default rather than selecting
-    // gemini. Pinned so a future change can't silently flip it.
-    expect(resolveConfiguredProvider({ GEMINI_API_KEY: "x" })).toBe(
-      DEFAULT_PROVIDER,
-    );
-  });
-
-  test("falls back to openrouter when only an OpenRouter key is present", () => {
-    expect(resolveConfiguredProvider({ OPENROUTER_API_KEY: "x" })).toBe(
-      "openrouter",
-    );
-  });
-
-  test("falls back to nvidia when only an NVIDIA key is present", () => {
-    expect(resolveConfiguredProvider({ NVIDIA_API_KEY: "x" })).toBe("nvidia");
-  });
-
-  test("falls back to bedrock when only a Bedrock access key is present", () => {
-    expect(resolveConfiguredProvider({ BEDROCK_AWS_ACCESS_KEY_ID: "x" })).toBe(
-      "bedrock",
+    expect(resolveConfiguredProvider({ OPENWIKI_PROVIDER: "claude-cli" })).toBe(
+      "claude-cli",
     );
   });
 
@@ -139,33 +98,8 @@ describe("resolveConfiguredProvider", () => {
 });
 
 describe("resolveProviderBaseUrl", () => {
-  test("returns the built-in default when no override is set", () => {
-    expect(resolveProviderBaseUrl("openrouter", {})).toBe(
-      "https://openrouter.ai/api/v1",
-    );
-    expect(resolveProviderBaseUrl("nebius", {})).toBe(NEBIUS_BASE_URL);
-    expect(resolveProviderBaseUrl("nvidia", {})).toBe(
-      "https://integrate.api.nvidia.com/v1",
-    );
-  });
-
-  test("prefers a non-empty env override over the default", () => {
-    expect(
-      resolveProviderBaseUrl("anthropic", {
-        ANTHROPIC_BASE_URL: "https://gateway.example/anthropic",
-      }),
-    ).toBe("https://gateway.example/anthropic");
-  });
-
-  test("ignores a whitespace-only override", () => {
-    // anthropic has no built-in default, so a blank override resolves to undefined.
-    expect(
-      resolveProviderBaseUrl("anthropic", { ANTHROPIC_BASE_URL: "   " }),
-    ).toBeUndefined();
-  });
-
-  test("returns undefined for a provider with no default and no override", () => {
-    expect(resolveProviderBaseUrl("openai", {})).toBeUndefined();
+  test("returns undefined for claude-cli, which has no base URL concept", () => {
+    expect(resolveProviderBaseUrl("claude-cli", {})).toBeUndefined();
   });
 });
 
@@ -214,135 +148,33 @@ describe("isValidBaseUrl", () => {
   });
 });
 
-describe("getProviderModelOptions", () => {
-  test("returns OpenAI models in display order", () => {
-    expect(getProviderModelOptions("openai")).toEqual([
-      { id: "gpt-5.6-terra", label: "5.6 Terra" },
-      { id: "gpt-5.6-luna", label: "5.6 Luna" },
-      { id: "gpt-5.6-sol", label: "5.6 Sol" },
-      { id: "gpt-5.5", label: "5.5" },
-      { id: "gpt-5.4-mini", label: "5.4 mini" },
-    ]);
-  });
-});
-
-describe("bedrock provider (IAM access key + secret key + region)", () => {
-  test("requires a secret key and a region, unlike API-key providers", () => {
-    expect(providerRequiresSecretKey("bedrock")).toBe(true);
-    expect(providerRequiresRegion("bedrock")).toBe(true);
-    expect(providerRequiresSecretKey("anthropic")).toBe(false);
-    expect(providerRequiresRegion("anthropic")).toBe(false);
+describe("claude-cli provider (fully keyless, spawns the operator's authenticated CLI)", () => {
+  test("requires no API key, secret key, or region", () => {
+    expect(providerRequiresApiKey("claude-cli")).toBe(false);
+    expect(providerRequiresSecretKey("claude-cli")).toBe(false);
+    expect(providerRequiresRegion("claude-cli")).toBe(false);
+    expect(getProviderApiKeyEnvKey("claude-cli")).toBeUndefined();
+    expect(getProviderSecretKeyEnvKey("claude-cli")).toBeUndefined();
+    expect(getProviderRegionEnvKey("claude-cli")).toBeUndefined();
   });
 
-  test("exposes the AWS-flavored env keys", () => {
-    expect(getProviderSecretKeyEnvKey("bedrock")).toBe(
-      "BEDROCK_AWS_SECRET_ACCESS_KEY",
-    );
-    expect(getProviderRegionEnvKey("bedrock")).toBe("BEDROCK_AWS_REGION");
+  test("resolveProviderRegion returns undefined (no region concept)", () => {
+    expect(resolveProviderRegion("claude-cli", {})).toBeUndefined();
   });
 
-  test("resolveProviderRegion reads the region env key and trims it", () => {
-    expect(
-      resolveProviderRegion("bedrock", { BEDROCK_AWS_REGION: " us-east-1 " }),
-    ).toBe("us-east-1");
-    expect(resolveProviderRegion("bedrock", {})).toBeUndefined();
+  test("has no preset model list", () => {
+    expect(getProviderModelOptions("claude-cli")).toEqual([]);
   });
 
-  test("has no preset model list (Bedrock model availability is account/region specific)", () => {
-    expect(getProviderModelOptions("bedrock")).toEqual([]);
-  });
-});
-
-describe("providerRequiresApiKey / getProviderApiKeyEnvKey", () => {
-  test("gemini-enterprise authenticates without an API key", () => {
-    expect(providerRequiresApiKey("gemini-enterprise")).toBe(false);
-    expect(getProviderApiKeyEnvKey("gemini-enterprise")).toBeUndefined();
+  test("getMissingProviderEnvKey is always null (nothing required)", () => {
+    expect(getMissingProviderEnvKey("claude-cli", {})).toBeNull();
   });
 
-  test("key-based providers still require one", () => {
-    expect(providerRequiresApiKey("anthropic")).toBe(true);
-    expect(providerRequiresApiKey("openrouter")).toBe(true);
-    expect(getProviderApiKeyEnvKey("anthropic")).toBe("ANTHROPIC_API_KEY");
-  });
-});
-
-describe("getMissingProviderEnvKey", () => {
-  test("reports the missing API key for key-based providers", () => {
-    expect(getMissingProviderEnvKey("anthropic", {})).toBe("ANTHROPIC_API_KEY");
-    expect(
-      getMissingProviderEnvKey("anthropic", { ANTHROPIC_API_KEY: "k" }),
-    ).toBeNull();
+  test("resolveProviderLocation returns undefined (no location concept)", () => {
+    expect(resolveProviderLocation("claude-cli", {})).toBeUndefined();
   });
 
-  test("reports the missing GCP project for gemini-enterprise", () => {
-    expect(getMissingProviderEnvKey("gemini-enterprise", {})).toBe(
-      "GOOGLE_CLOUD_PROJECT",
-    );
-    expect(
-      getMissingProviderEnvKey("gemini-enterprise", {
-        GOOGLE_CLOUD_PROJECT: "proj",
-      }),
-    ).toBeNull();
+  test("getDefaultModelId falls back to the global DEFAULT_MODEL_ID", () => {
+    expect(getDefaultModelId("claude-cli")).toBe(DEFAULT_MODEL_ID);
   });
-
-  test("does not require the optional gemini-enterprise location", () => {
-    expect(
-      getMissingProviderEnvKey("gemini-enterprise", {
-        GOOGLE_CLOUD_PROJECT: "proj",
-        GOOGLE_CLOUD_LOCATION: undefined,
-      }),
-    ).toBeNull();
-  });
-});
-
-describe("resolveProviderLocation", () => {
-  test("defaults gemini-enterprise to the global endpoint", () => {
-    expect(resolveProviderLocation("gemini-enterprise", {})).toBe(
-      DEFAULT_VERTEX_LOCATION,
-    );
-  });
-
-  test("prefers a trimmed env override over the default", () => {
-    expect(
-      resolveProviderLocation("gemini-enterprise", {
-        GOOGLE_CLOUD_LOCATION: " europe-west1 ",
-      }),
-    ).toBe("europe-west1");
-  });
-
-  test("ignores a whitespace-only override", () => {
-    expect(
-      resolveProviderLocation("gemini-enterprise", {
-        GOOGLE_CLOUD_LOCATION: "   ",
-      }),
-    ).toBe(DEFAULT_VERTEX_LOCATION);
-  });
-
-  test("returns undefined for providers without a location concept", () => {
-    expect(resolveProviderLocation("openai", {})).toBeUndefined();
-  });
-});
-
-describe("getDefaultModelId", () => {
-  test("returns the first model option for a provider", () => {
-    expect(getDefaultModelId("anthropic")).toBe("claude-haiku-4-5");
-    expect(getDefaultModelId("nebius")).toBe("moonshotai/Kimi-K2.6");
-    expect(getDefaultModelId("nvidia")).toBe(
-      "nvidia/nemotron-3-super-120b-a12b",
-    );
-    expect(getDefaultModelId("gemini")).toBe("gemini-3.5-flash");
-    expect(getDefaultModelId("gemini-enterprise")).toBe("gemini-3.5-flash");
-    expect(getDefaultModelId(DEFAULT_PROVIDER)).toBe(DEFAULT_MODEL_ID);
-  });
-
-  test(
-    "openai-compatible has no presets, so it falls back to the global " +
-      "DEFAULT_MODEL_ID (a known cross-provider quirk documented here)",
-    () => {
-      // This asserts CURRENT behavior: openai-compatible has an empty
-      // modelOptions list, so getDefaultModelId yields an OpenRouter id.
-      // If this ever changes intentionally, update this test.
-      expect(getDefaultModelId("openai-compatible")).toBe(DEFAULT_MODEL_ID);
-    },
-  );
 });
