@@ -31,16 +31,7 @@ jobs:
         # --update also handles the first run for code docs when env vars are set.
         run: openwiki code --update --print
         env:
-          # This fork disables telemetry by default (src/constants.ts) since
-          # it processes personal vault content. Uncomment to re-enable:
-          # OPENWIKI_TELEMETRY_DISABLED: "0"
-          # TODO: Replace with your preferred inference provider and model
-          OPENWIKI_PROVIDER: openrouter
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OPENWIKI_MODEL_ID: z-ai/glm-5.2
-          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
-          LANGCHAIN_PROJECT: openwiki
-          LANGCHAIN_TRACING_V2: "true"
+          OPENWIKI_PROVIDER: claude-cli
 
       - name: Classify update as structural or routine
         id: classify

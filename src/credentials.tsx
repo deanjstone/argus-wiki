@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
-import { spawn } from "node:child_process";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { homedir } from "node:os";
 import path from "node:path";
 import { Box, Text, useInput, useStdout } from "ink";
@@ -24,8 +23,6 @@ import {
   isValidModelId,
   normalizeProvider,
   normalizeModelId,
-  OPENAI_CHATGPT_EMAIL_ENV_KEY,
-  OPENAI_CHATGPT_PLAN_ENV_KEY,
   OPENWIKI_GOOGLE_CLIENT_ID_ENV_KEY,
   OPENWIKI_GOOGLE_CLIENT_SECRET_ENV_KEY,
   OPENWIKI_MODEL_ID_ENV_KEY,
@@ -36,19 +33,9 @@ import {
   providerRequiresBaseUrl,
   providerRequiresRegion,
   providerRequiresSecretKey,
-  providerUsesOAuth,
   resolveConfiguredProvider,
   SELECTABLE_OPENWIKI_PROVIDERS,
 } from "./constants.js";
-import {
-  type ChatGptLoginHandle,
-  type CodexTokens,
-  codexTokensToEnv,
-  formatChatGptAccount,
-  isChatGptTokenExpired,
-  loginWithChatGPT,
-  readCodexTokensFromEnv,
-} from "./agent/openai-chatgpt-oauth.js";
 import type { AuthProviderId } from "./auth/types.js";
 import type { OpenWikiRunMode } from "./commands.js";
 import type { ConnectorId } from "./connectors/types.js";
@@ -110,7 +97,6 @@ type PromptStep =
   | "gcp-project"
   | "langsmith"
   | "model"
-  | "oauth-login"
   | "provider"
   | "region"
   | "run-mode"
@@ -395,29 +381,16 @@ export function needsCredentialSetup(
 
 /**
  * Whether the provider still needs its primary credential collected. For
- * `oauth` providers this is a valid, non-expired stored token; for API-key
- * providers it is a pasted key; for keyless providers (gemini-enterprise) it is
- * the required GCP project id.
+ * API-key providers it is a pasted key; for keyless providers
+ * (gemini-enterprise) it is the required GCP project id.
  */
 function needsCredentialStep(provider: OpenWikiProvider): boolean {
-  return providerUsesOAuth(provider)
-    ? !hasValidStoredToken()
-    : getMissingProviderEnvKey(provider) !== null;
+  return getMissingProviderEnvKey(provider) !== null;
 }
 
 /** The step that collects the provider's primary credential. */
 function credentialStep(provider: OpenWikiProvider): PromptStep {
-  if (providerUsesOAuth(provider)) {
-    return "oauth-login";
-  }
-
   return providerRequiresApiKey(provider) ? "api-key" : "gcp-project";
-}
-
-function hasValidStoredToken(env: NodeJS.ProcessEnv = process.env): boolean {
-  const tokens = readCodexTokensFromEnv(env);
-
-  return tokens !== null && !isChatGptTokenExpired(tokens.expiresAtMs);
 }
 
 function needsGcpProjectStep(provider: OpenWikiProvider): boolean {
@@ -469,28 +442,10 @@ function isRegionConfigured(provider: OpenWikiProvider): boolean {
 }
 
 function isCredentialConfigured(provider: OpenWikiProvider): boolean {
-  return providerUsesOAuth(provider)
-    ? hasValidStoredToken()
-    : getMissingProviderEnvKey(provider) === null;
+  return getMissingProviderEnvKey(provider) === null;
 }
 
-function getCredentialSetupDetail(
-  provider: OpenWikiProvider,
-  tokens: CodexTokens | null = null,
-): string {
-  if (providerUsesOAuth(provider)) {
-    if (!isCredentialConfigured(provider) && !tokens) {
-      return "sign in with your ChatGPT account";
-    }
-
-    const account = formatChatGptAccount(
-      tokens?.email ?? process.env[OPENAI_CHATGPT_EMAIL_ENV_KEY] ?? null,
-      tokens?.planType ?? process.env[OPENAI_CHATGPT_PLAN_ENV_KEY] ?? null,
-    );
-
-    return account ? `signed in as ${account}` : "signed in with ChatGPT";
-  }
-
+function getCredentialSetupDetail(provider: OpenWikiProvider): string {
   const apiKeyEnvKey = getProviderApiKeyEnvKey(provider);
 
   return isCredentialConfigured(provider)
@@ -498,40 +453,6 @@ function getCredentialSetupDetail(
     : apiKeyEnvKey
       ? `save ${apiKeyEnvKey} to ${openWikiEnvPath}`
       : "configure Google Cloud credentials";
-}
-
-/**
- * Copies text to the terminal's clipboard using the OSC 52 escape sequence.
- * This targets the user's local terminal emulator even when OpenWiki runs over
- * SSH, unlike shelling out to a host clipboard utility.
- */
-function copyToClipboard(text: string): void {
-  const encoded = Buffer.from(text, "utf8").toString("base64");
-
-  process.stdout.write(`\u001b]52;c;${encoded}\u0007`);
-}
-
-function openLoginUrl(url: string): void {
-  try {
-    const child =
-      process.platform === "win32"
-        ? spawn("cmd", ["/c", "start", '""', `"${url}"`], {
-            detached: true,
-            stdio: "ignore",
-            windowsVerbatimArguments: true,
-          })
-        : spawn(process.platform === "darwin" ? "open" : "xdg-open", [url], {
-            detached: true,
-            stdio: "ignore",
-          });
-
-    child.on("error", () => {
-      // The URL is also rendered for manual use on headless/SSH machines.
-    });
-    child.unref();
-  } catch {
-    // Ignore spawn failures; the URL is still rendered for manual use.
-  }
 }
 
 export function InitSetup({
@@ -598,13 +519,7 @@ export function InitSetup({
   const [notice, setNotice] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isAuthRunning, setIsAuthRunning] = useState(false);
-  const [oauthTokens, setOauthTokens] = useState<CodexTokens | null>(null);
-  const [loginUrl, setLoginUrl] = useState<string | null>(null);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [loginAttempt, setLoginAttempt] = useState(0);
-  const [copied, setCopied] = useState(false);
   const [forceModelStep, setForceModelStep] = useState(false);
-  const loginHandleRef = useRef<ChatGptLoginHandle | null>(null);
 
   const activeSourceOptions = useMemo(
     () => getTemplateSourceOptions(getConfigModeId(onboardingConfig)),
@@ -716,140 +631,8 @@ export function InitSetup({
     mode,
   ]);
 
-  // Drive the browser OAuth login whenever the wizard enters the oauth-login
-  // step or the user retries after a failure.
-  useEffect(() => {
-    if (step !== "oauth-login") {
-      return;
-    }
-
-    let cancelled = false;
-
-    setIsLoggingIn(true);
-    setLoginUrl(null);
-    setCopied(false);
-    setInput("");
-    setError(null);
-    loginHandleRef.current = null;
-
-    void (async () => {
-      try {
-        const tokens = await loginWithChatGPT(
-          (url) => {
-            if (cancelled) {
-              return;
-            }
-
-            setLoginUrl(url);
-            openLoginUrl(url);
-          },
-          (handle) => {
-            if (!cancelled) {
-              loginHandleRef.current = handle;
-            }
-          },
-        );
-
-        if (cancelled) {
-          return;
-        }
-
-        setOauthTokens(tokens);
-        setIsLoggingIn(false);
-
-        const nextStep = getNextStepAfterApiKey(
-          provider,
-          modelIdOverride,
-          onboardingConfig,
-          selectedMode,
-          forceModelStep,
-        );
-
-        if (nextStep) {
-          setIsCustomModelInput(
-            nextStep === "model" && shouldStartWithCustomModelInput(provider),
-          );
-          setStep(nextStep);
-          return;
-        }
-
-        await completeSetup({
-          nextApiKey: apiKey,
-          nextBaseUrl: baseUrl,
-          nextSecretKey: secretKey,
-          nextRegion: region,
-          nextGcpLocation: gcpLocation,
-          nextGcpProject: gcpProject,
-          nextLangSmithKey: langSmithKey,
-          nextModelId: modelId,
-          nextOAuthTokens: tokens,
-          nextProvider: provider,
-          runMode: selectedMode,
-        });
-      } catch (loginError) {
-        if (cancelled) {
-          return;
-        }
-
-        setIsLoggingIn(false);
-        setError(getErrorMessage(loginError));
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [step, loginAttempt]);
-
   useInput((inputValue, key) => {
-    if (
-      isSaving ||
-      isAuthRunning ||
-      (isLoggingIn && step !== "oauth-login") ||
-      step === null
-    ) {
-      return;
-    }
-
-    if (step === "oauth-login") {
-      if (
-        input.length === 0 &&
-        (inputValue === "c" || inputValue === "C") &&
-        !key.ctrl &&
-        !key.meta
-      ) {
-        if (loginUrl) {
-          copyToClipboard(loginUrl);
-          setCopied(true);
-        }
-
-        return;
-      }
-
-      if (key.return) {
-        const pasted = input.trim();
-
-        if (pasted.length > 0) {
-          submitManualLogin(pasted);
-        } else if (!isLoggingIn) {
-          setLoginAttempt((attempt) => attempt + 1);
-        }
-
-        return;
-      }
-
-      if (key.backspace || key.delete) {
-        setInput((value) => value.slice(0, -1));
-        return;
-      }
-
-      const sanitizedInput = sanitizeInputChunk(inputValue);
-
-      if (sanitizedInput && !key.ctrl && !key.meta) {
-        setError(null);
-        setInput((value) => value + sanitizedInput);
-      }
-
+    if (isSaving || isAuthRunning || step === null) {
       return;
     }
 
@@ -1116,7 +899,6 @@ export function InitSetup({
         nextGcpProject: gcpProject,
         nextLangSmithKey: langSmithKey,
         nextModelId: modelId,
-        nextOAuthTokens: oauthTokens,
         nextProvider: provider,
         runMode: selectedOption.id,
       });
@@ -1194,7 +976,6 @@ export function InitSetup({
         nextGcpProject: gcpProject,
         nextLangSmithKey: langSmithKey,
         nextModelId: modelId,
-        nextOAuthTokens: oauthTokens,
         nextProvider: selectedProvider,
         runMode: selectedMode,
       });
@@ -1238,7 +1019,6 @@ export function InitSetup({
         nextGcpProject: gcpProject,
         nextLangSmithKey: langSmithKey,
         nextModelId: modelId,
-        nextOAuthTokens: oauthTokens,
         nextProvider: provider,
         runMode: selectedMode,
       });
@@ -1282,7 +1062,6 @@ export function InitSetup({
         nextGcpProject: gcpProject,
         nextLangSmithKey: langSmithKey,
         nextModelId: modelId,
-        nextOAuthTokens: oauthTokens,
         nextProvider: provider,
         runMode: selectedMode,
       });
@@ -1326,7 +1105,6 @@ export function InitSetup({
         nextGcpProject: gcpProject,
         nextLangSmithKey: langSmithKey,
         nextModelId: modelId,
-        nextOAuthTokens: oauthTokens,
         nextProvider: provider,
         runMode: selectedMode,
       });
@@ -1393,7 +1171,6 @@ export function InitSetup({
         nextGcpProject: gcpProject,
         nextLangSmithKey: langSmithKey,
         nextModelId: modelId,
-        nextOAuthTokens: oauthTokens,
         nextProvider: provider,
         runMode: selectedMode,
       });
@@ -1442,7 +1219,6 @@ export function InitSetup({
         nextGcpProject: gcpProject,
         nextLangSmithKey: langSmithKey,
         nextModelId: modelId,
-        nextOAuthTokens: oauthTokens,
         nextProvider: provider,
         runMode: selectedMode,
       });
@@ -1486,7 +1262,6 @@ export function InitSetup({
         nextGcpProject: gcpProject,
         nextLangSmithKey: langSmithKey,
         nextModelId: selectedModelId,
-        nextOAuthTokens: oauthTokens,
         nextProvider: provider,
         runMode: selectedMode,
       });
@@ -1508,7 +1283,6 @@ export function InitSetup({
         nextGcpProject: gcpProject,
         nextLangSmithKey,
         nextModelId: modelId,
-        nextOAuthTokens: oauthTokens,
         nextProvider: provider,
         runMode: selectedMode,
       });
@@ -1762,7 +1536,7 @@ export function InitSetup({
             ? codeRepoRoot
             : undefined,
         runIngestionNow,
-        savedApiKey: apiKey !== null || oauthTokens !== null,
+        savedApiKey: apiKey !== null,
         savedBaseUrl: baseUrl !== null,
         savedGcpLocation: gcpLocation !== null,
         savedGcpProject: gcpProject !== null,
@@ -1818,7 +1592,6 @@ export function InitSetup({
     nextGcpProject: string | null;
     nextLangSmithKey: string | null;
     nextModelId: string | null;
-    nextOAuthTokens?: CodexTokens | null;
     nextProvider: OpenWikiProvider;
     nextRegion: string | null;
     nextSecretKey: string | null;
@@ -1888,8 +1661,7 @@ export function InitSetup({
           : undefined,
       mode: options.runMode,
       runIngestionNow: false,
-      savedApiKey:
-        options.nextApiKey !== null || options.nextOAuthTokens != null,
+      savedApiKey: options.nextApiKey !== null,
       savedBaseUrl: options.nextBaseUrl !== null,
       savedRegion: options.nextRegion !== null,
       savedSecretKey: options.nextSecretKey !== null,
@@ -1912,7 +1684,6 @@ export function InitSetup({
     nextGcpProject,
     nextLangSmithKey,
     nextModelId,
-    nextOAuthTokens = oauthTokens,
     nextProvider,
     nextRegion,
     nextSecretKey,
@@ -1932,10 +1703,6 @@ export function InitSetup({
         if (apiKeyEnvKey) {
           updates[apiKeyEnvKey] = nextApiKey;
         }
-      }
-
-      if (nextOAuthTokens) {
-        Object.assign(updates, codexTokensToEnv(nextOAuthTokens));
       }
 
       if (nextBaseUrl !== null) {
@@ -2218,25 +1985,6 @@ export function InitSetup({
     }
   }
 
-  function submitManualLogin(pasted: string): void {
-    const handle = loginHandleRef.current;
-
-    if (!handle) {
-      setError("Login is still starting. Try again in a moment.");
-      return;
-    }
-
-    const errorMessage = handle.submitManual(pasted);
-
-    if (errorMessage) {
-      setError(errorMessage);
-      return;
-    }
-
-    setInput("");
-    setError(null);
-  }
-
   const needsCredentialPrompt =
     !hasValidConfiguredProvider() ||
     needsCredentialStep(provider) ||
@@ -2266,19 +2014,17 @@ export function InitSetup({
           }
           detail={getProviderSetupDetail(provider)}
         />
-        {providerUsesOAuth(provider) || apiKeyEnvKey ? (
+        {apiKeyEnvKey ? (
           <SetupStep
-            label={
-              providerUsesOAuth(provider) ? "ChatGPT login" : "Provider key"
-            }
+            label="Provider key"
             state={
-              isCredentialConfigured(provider) || oauthTokens
+              isCredentialConfigured(provider)
                 ? "done"
                 : step === credentialStep(provider)
                   ? "current"
                   : "pending"
             }
-            detail={getCredentialSetupDetail(provider, oauthTokens)}
+            detail={getCredentialSetupDetail(provider)}
           />
         ) : null}
         {providerRequiresSecretKey(provider) ? (
@@ -2470,50 +2216,40 @@ export function InitSetup({
         ) : null}
       </Box>
 
-      {step === "oauth-login" ? (
-        <OAuthLoginPrompt
-          copied={copied}
-          input={input}
-          isLoggingIn={isLoggingIn}
-          loginUrl={loginUrl}
-          provider={provider}
-        />
-      ) : (
-        <SetupPanel title="Prompt">
-          {step ? (
-            <Prompt
-              codeRepoRoot={codeRepoRoot}
-              codeRepoSelectionIndex={codeRepoSelectionIndex}
-              cronFieldSelectionIndex={cronFieldSelectionIndex}
-              cronModeSelectionIndex={cronModeSelectionIndex}
-              finalSelectionIndex={finalSelectionIndex}
-              input={input}
-              inputDisplayWidth={inputDisplayWidth}
-              isCustomModelInput={isCustomModelInput}
-              modelSelectionIndex={modelSelectionIndex}
-              onboardingConfig={onboardingConfig}
-              powerModeSelectionIndex={powerModeSelectionIndex}
-              provider={provider}
-              providerSelectionIndex={providerSelectionIndex}
-              runModeSelectionIndex={runModeSelectionIndex}
-              secretInputIndex={secretInputIndex}
-              selectedMode={selectedMode}
-              selectedSource={selectedSource}
-              sourceOptions={activeSourceOptions}
-              sourceContinueSelectionIndex={sourceContinueSelectionIndex}
-              sourceDescriptionSelectionIndex={sourceDescriptionSelectionIndex}
-              sourceSelectionIndex={sourceSelectionIndex}
-              sourceState={sourceState}
-              step={step}
-              suggestedCronDescription={suggestedCronDescription}
-              suggestedCronExpression={suggestedCronExpression}
-              templateSelectionIndex={templateSelectionIndex}
-            />
-          ) : (
-            <Text>Inspecting OpenWiki setup...</Text>
-          )}
-        </SetupPanel>
-      )}
+      <SetupPanel title="Prompt">
+        {step ? (
+          <Prompt
+            codeRepoRoot={codeRepoRoot}
+            codeRepoSelectionIndex={codeRepoSelectionIndex}
+            cronFieldSelectionIndex={cronFieldSelectionIndex}
+            cronModeSelectionIndex={cronModeSelectionIndex}
+            finalSelectionIndex={finalSelectionIndex}
+            input={input}
+            inputDisplayWidth={inputDisplayWidth}
+            isCustomModelInput={isCustomModelInput}
+            modelSelectionIndex={modelSelectionIndex}
+            onboardingConfig={onboardingConfig}
+            powerModeSelectionIndex={powerModeSelectionIndex}
+            provider={provider}
+            providerSelectionIndex={providerSelectionIndex}
+            runModeSelectionIndex={runModeSelectionIndex}
+            secretInputIndex={secretInputIndex}
+            selectedMode={selectedMode}
+            selectedSource={selectedSource}
+            sourceOptions={activeSourceOptions}
+            sourceContinueSelectionIndex={sourceContinueSelectionIndex}
+            sourceDescriptionSelectionIndex={sourceDescriptionSelectionIndex}
+            sourceSelectionIndex={sourceSelectionIndex}
+            sourceState={sourceState}
+            step={step}
+            suggestedCronDescription={suggestedCronDescription}
+            suggestedCronExpression={suggestedCronExpression}
+            templateSelectionIndex={templateSelectionIndex}
+          />
+        ) : (
+          <Text>Inspecting OpenWiki setup...</Text>
+        )}
+      </SetupPanel>
 
       {needsCredentialPrompt ? (
         <Text color="gray">Secrets are masked and saved only after setup.</Text>
@@ -3313,67 +3049,6 @@ function OAuthAuthorizationLink({
   );
 }
 
-function OAuthLoginPrompt({
-  copied,
-  input,
-  isLoggingIn,
-  loginUrl,
-  provider,
-}: {
-  copied: boolean;
-  input: string;
-  isLoggingIn: boolean;
-  loginUrl: string | null;
-  provider: OpenWikiProvider;
-}) {
-  return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Text bold color="cyan">
-        ChatGPT login
-      </Text>
-      <Text>
-        Sign in with your {getProviderLabel(provider)} account to authorize
-        OpenWiki.
-      </Text>
-      {loginUrl ? (
-        <Box flexDirection="column" marginTop={1}>
-          <Text color="gray">
-            Opening your browser. If it does not open, copy this URL:
-          </Text>
-          <Text color="cyan" wrap="wrap">
-            {loginUrl}
-          </Text>
-          <Text color="gray">
-            Press <Text bold>c</Text> to copy the URL
-            {copied ? <Text color="green"> (copied)</Text> : null}
-          </Text>
-          <Box flexDirection="column" marginTop={1}>
-            <Text color="gray">
-              If the browser cannot reach this machine, paste the redirect URL
-              or authorization code and press Enter:
-            </Text>
-            <Text>
-              <Text color="gray">&gt; </Text>
-              {input.length > 0 ? (
-                <Text color="yellow">{input}</Text>
-              ) : (
-                <Text color="gray">(paste here)</Text>
-              )}
-            </Text>
-          </Box>
-        </Box>
-      ) : (
-        <Text color="gray">Starting the ChatGPT login...</Text>
-      )}
-      <Text color="gray">
-        {isLoggingIn
-          ? "Waiting for browser sign-in or pasted URL..."
-          : "Login failed. Press Enter to retry."}
-      </Text>
-    </Box>
-  );
-}
-
 function BorderedInput({
   borderColor = "cyan",
   maxDisplayWidth,
@@ -3927,14 +3602,10 @@ function getProviderSetupDetail(provider: OpenWikiProvider): string {
 }
 
 /**
- * Label for the provider's primary credential input. Bedrock authenticates
- * with an IAM access key ID (paired with a secret access key), not a single
- * opaque API key, so its prompt reads differently from every other provider.
+ * Label for the provider's primary credential input.
  */
 function getApiKeyFieldLabel(provider: OpenWikiProvider): string {
-  return provider === "bedrock"
-    ? `${getProviderLabel(provider)} access key ID`
-    : `${getProviderLabel(provider)} API key`;
+  return `${getProviderLabel(provider)} API key`;
 }
 
 function hasValidConfiguredProvider(): boolean {
@@ -4035,14 +3706,12 @@ function getInputDisplayWidth(stdoutColumns: number | undefined): number {
   return Math.max(24, Math.min(96, stdoutColumns - 16));
 }
 
+// Keeps a `provider` parameter for API-shape consistency with the rest of
+// the pluggable provider abstraction, even though the sole remaining
+// provider (claude-cli, "a Claude Code CLI ...") always takes the article "a".
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getProviderArticle(provider: OpenWikiProvider): "a" | "an" {
-  return provider === "baseten" ||
-    provider === "fireworks" ||
-    provider === "gemini" ||
-    provider === "gemini-enterprise" ||
-    provider === "nebius"
-    ? "a"
-    : "an";
+  return "a";
 }
 
 function getTemplateGoal(templateId: string | undefined): string {

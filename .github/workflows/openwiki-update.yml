@@ -49,7 +49,6 @@ jobs:
           # authenticated `claude` CLI on this self-hosted runner instead of
           # calling a hosted API. No API key secrets needed.
           OPENWIKI_PROVIDER: claude-cli
-          OPENWIKI_TELEMETRY_DISABLED: "1"
 
       - name: Classify update as structural or routine
         id: classify

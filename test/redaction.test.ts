@@ -5,7 +5,6 @@ import {
   isSecretLikeKey,
   sanitizeDiagnosticText,
 } from "../src/diagnostics.ts";
-import { sanitizeOpenRouterResponseBody } from "../src/agent/index.ts";
 
 describe("isSecretLikeKey", () => {
   // The shared predicate must be the union of every term the three former
@@ -34,25 +33,6 @@ describe("isSecretLikeKey", () => {
       expect(isSecretLikeKey(key)).toBe(false);
     },
   );
-});
-
-describe("sanitizeOpenRouterResponseBody", () => {
-  test("redacts values for the unified secret key set", () => {
-    const body = JSON.stringify({
-      access_token: "should-be-hidden",
-      user_id: "u-123",
-      cookie: "session=abc",
-      model: "gpt-5.5",
-    });
-    const sanitized = sanitizeOpenRouterResponseBody(body);
-
-    expect(sanitized).not.toContain("should-be-hidden");
-    expect(sanitized).not.toContain("u-123");
-    expect(sanitized).not.toContain("session=abc");
-    expect(sanitized).toContain("[REDACTED]");
-    // Non-secret fields are preserved.
-    expect(sanitized).toContain("gpt-5.5");
-  });
 });
 
 describe("sanitizeDiagnosticText", () => {
@@ -248,33 +228,5 @@ describe("getErrorMessage", () => {
     expect(getErrorMessage(new Error("bad token sk-abcDEF123"))).toContain(
       "[REDACTED:API_KEY]",
     );
-  });
-});
-
-describe("sanitizeOpenRouterResponseBody", () => {
-  test("redacts secret-bearing JSON values while keeping the key name", () => {
-    const body = JSON.stringify({ api_key: "secret123", model: "glm-5.2" });
-    const result = sanitizeOpenRouterResponseBody(body);
-
-    expect(result).not.toContain("secret123");
-    expect(result).toContain('"api_key":"[REDACTED]"');
-    expect(result).toContain("glm-5.2");
-  });
-
-  test("redacts authorization and token fields", () => {
-    const body = JSON.stringify({
-      authorization: "Bearer abc",
-      token: "tok_123",
-    });
-    const result = sanitizeOpenRouterResponseBody(body);
-
-    expect(result).not.toContain("Bearer abc");
-    expect(result).not.toContain("tok_123");
-  });
-
-  test("leaves a body with no secret-shaped keys untouched", () => {
-    const body = JSON.stringify({ error: "rate limited", status: 429 });
-
-    expect(sanitizeOpenRouterResponseBody(body)).toBe(body);
   });
 });

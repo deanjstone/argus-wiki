@@ -10,7 +10,7 @@ Light-touch fork of [langchain-ai/openwiki](https://github.com/langchain-ai/open
 ## Local divergence from upstream
 
 - `src/constants.ts` / `src/openwiki-home.ts` — `OPEN_WIKI_DIR` and `openWikiHomeDir` are env-overridable (`OPENWIKI_OUTPUT_DIR`, `OPENWIKI_HOME`), defaulting to upstream's original paths when unset. No longer deliberately kept small — hard-fork status ([wayfinder map #15](https://github.com/deanjstone/argus-wiki/issues/15)) means upstream merges are on-demand/cherry-pick-only, not routine, so minimizing diff surface here is no longer a design constraint; these files can be refactored or expanded freely.
-- `src/constants.ts` — `OPENWIKI_TELEMETRY_DISABLED` defaults to `"1"` (upstream defaults it unset/telemetry-on) since this fork processes personal vault content. Set `OPENWIKI_TELEMETRY_DISABLED=0` explicitly to re-enable.
+- `src/constants.ts` — `OpenWikiProvider` is narrowed to `"claude-cli"` only. This fork only ever runs headless via `OPENWIKI_PROVIDER=claude-cli`, so all other agent backends, the LangChain/LangGraph execution core, and PostHog telemetry were removed ([#35](https://github.com/deanjstone/argus-wiki/issues/35)). The provider abstraction itself (`OpenWikiProvider` union, `PROVIDER_CONFIGS` keyed lookup) remains pluggable, just narrowed to one member.
 
 ## Not yet done
 

@@ -1,12 +1,6 @@
 export const OPEN_WIKI_DIR = process.env.OPENWIKI_OUTPUT_DIR ?? "openwiki";
 export const UPDATE_METADATA_PATH = `${OPEN_WIKI_DIR}/.last-update.json`;
 
-// Fork default: this fork's OpenWiki processes personal vault content
-// (CONTEXT/CORTEX), so telemetry is opt-in rather than opt-out. Set
-// OPENWIKI_TELEMETRY_DISABLED=0 explicitly to re-enable it.
-if (process.env.OPENWIKI_TELEMETRY_DISABLED === undefined) {
-  process.env.OPENWIKI_TELEMETRY_DISABLED = "1";
-}
 export const BASETEN_API_KEY_ENV_KEY = "BASETEN_API_KEY";
 export const FIREWORKS_API_KEY_ENV_KEY = "FIREWORKS_API_KEY";
 export const NEBIUS_API_KEY_ENV_KEY = "NEBIUS_API_KEY";
@@ -37,7 +31,6 @@ export const GOOGLE_APPLICATION_CREDENTIALS_ENV_KEY =
 export const DEFAULT_VERTEX_LOCATION = "global";
 export const OPENWIKI_PROVIDER_ENV_KEY = "OPENWIKI_PROVIDER";
 export const OPENWIKI_MODEL_ID_ENV_KEY = "OPENWIKI_MODEL_ID";
-export const NEBIUS_BASE_URL = "https://api.tokenfactory.nebius.com/v1/";
 export const OPENWIKI_PROVIDER_RETRY_ATTEMPTS_ENV_KEY =
   "OPENWIKI_PROVIDER_RETRY_ATTEMPTS";
 export const DEFAULT_PROVIDER_RETRY_ATTEMPTS = 3;
@@ -69,23 +62,9 @@ export const OPENWIKI_X_CLIENT_ID_ENV_KEY = "OPENWIKI_X_CLIENT_ID";
 export const OPENWIKI_X_CLIENT_SECRET_ENV_KEY = "OPENWIKI_X_CLIENT_SECRET";
 export const OPENWIKI_X_REFRESH_TOKEN_ENV_KEY = "OPENWIKI_X_REFRESH_TOKEN";
 export const OPENWIKI_TAVILY_API_KEY_ENV_KEY = "TAVILY_API_KEY";
-export const DEFAULT_PROVIDER = "openai";
-export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+export const DEFAULT_PROVIDER = "claude-cli";
 
-export type OpenWikiProvider =
-  | "anthropic"
-  | "baseten"
-  | "bedrock"
-  | "claude-cli"
-  | "fireworks"
-  | "gemini"
-  | "gemini-enterprise"
-  | "nebius"
-  | "nvidia"
-  | "openai"
-  | "openai-chatgpt"
-  | "openai-compatible"
-  | "openrouter";
+export type OpenWikiProvider = "claude-cli";
 
 /**
  * How a provider authenticates. Providers default to `"api-key"` (a pasted
@@ -100,32 +79,6 @@ export type ProviderModelOption = {
   id: string;
   label: string;
 };
-
-/**
- * Model options offered by OpenAI. Shared by the `openai` (API key) and
- * `openai-chatgpt` (OAuth login) providers so the two always expose an
- * identical model list.
- */
-const OPENAI_MODEL_OPTIONS: ProviderModelOption[] = [
-  { id: "gpt-5.6-terra", label: "5.6 Terra" },
-  { id: "gpt-5.6-luna", label: "5.6 Luna" },
-  { id: "gpt-5.6-sol", label: "5.6 Sol" },
-  { id: "gpt-5.5", label: "5.5" },
-  { id: "gpt-5.4-mini", label: "5.4 mini" },
-];
-
-/**
- * Google's own Gemini models. Offered by the `gemini` (AI Studio) provider and,
- * on Gemini Enterprise (Vertex AI), served over the native `generateContent`
- * surface. The `gemini-enterprise` provider additionally reaches Claude and
- * partner/open-weight Model Garden models by pasting those model IDs directly.
- */
-const GEMINI_MODELS: ProviderModelOption[] = [
-  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
-  { id: "gemini-3.1-pro", label: "Gemini 3.1 Pro" },
-  { id: "gemini-3-flash", label: "Gemini 3 Flash" },
-  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite" },
-];
 
 type ProviderConfig = {
   /**
@@ -182,31 +135,10 @@ type ProviderConfig = {
   requiresRegion?: boolean;
 };
 
-export const SELECTABLE_OPENWIKI_PROVIDERS = [
-  "openai",
-  "openai-chatgpt",
-  "anthropic",
-  "gemini",
-  "gemini-enterprise",
-  "openrouter",
-  "openai-compatible",
-  "bedrock",
-  "fireworks",
-  "baseten",
-  "nebius",
-  "nvidia",
-] as const satisfies readonly SelectableOpenWikiProvider[];
+export const SELECTABLE_OPENWIKI_PROVIDERS =
+  [] as const satisfies readonly SelectableOpenWikiProvider[];
 
 export const PROVIDER_CONFIGS: Record<OpenWikiProvider, ProviderConfig> = {
-  baseten: {
-    apiKeyEnvKey: BASETEN_API_KEY_ENV_KEY,
-    baseURL: "https://inference.baseten.co/v1",
-    label: "Baseten",
-    modelOptions: [
-      { id: "zai-org/GLM-5.2", label: "GLM 5.2" },
-      { id: "moonshotai/Kimi-K2.7-Code", label: "Kimi K2.7 Code" },
-    ],
-  },
   "claude-cli": {
     // Fully keyless: spawns the operator's already-authenticated `claude` CLI
     // binary as a subprocess instead of calling a hosted API. Opt-in only via
@@ -215,123 +147,6 @@ export const PROVIDER_CONFIGS: Record<OpenWikiProvider, ProviderConfig> = {
     // walk a user through in interactive onboarding.
     label: "Claude Code CLI",
     modelOptions: [],
-  },
-  bedrock: {
-    apiKeyEnvKey: BEDROCK_AWS_ACCESS_KEY_ID_ENV_KEY,
-    label: "AWS Bedrock",
-    // Available model IDs are account- and region-specific (they depend on
-    // which foundation models are enabled in Bedrock), so there is no safe
-    // preset list here; paste the Bedrock model ID directly, for example
-    // anthropic.claude-sonnet-5-20260101-v1:0.
-    modelOptions: [],
-    secretKeyEnvKey: BEDROCK_AWS_SECRET_ACCESS_KEY_ENV_KEY,
-    regionEnvKey: BEDROCK_AWS_REGION_ENV_KEY,
-    requiresRegion: true,
-  },
-  fireworks: {
-    apiKeyEnvKey: FIREWORKS_API_KEY_ENV_KEY,
-    baseURL: "https://api.fireworks.ai/inference/v1",
-    label: "Fireworks",
-    modelOptions: [
-      { id: "accounts/fireworks/models/glm-5p2", label: "GLM 5.2" },
-      {
-        id: "accounts/fireworks/models/kimi-k2p7-code",
-        label: "Kimi K2.7 Code",
-      },
-    ],
-  },
-  nebius: {
-    apiKeyEnvKey: NEBIUS_API_KEY_ENV_KEY,
-    baseURL: NEBIUS_BASE_URL,
-    label: "Nebius Token Factory",
-    modelOptions: [{ id: "moonshotai/Kimi-K2.6", label: "Kimi K2.6" }],
-  },
-  nvidia: {
-    apiKeyEnvKey: NVIDIA_API_KEY_ENV_KEY,
-    baseURL: "https://integrate.api.nvidia.com/v1",
-    label: "NVIDIA NIM",
-    modelOptions: [
-      {
-        id: "nvidia/nemotron-3-super-120b-a12b",
-        label: "Nemotron 3 Super 120B A12B",
-      },
-      {
-        id: "nvidia/nemotron-3-ultra-550b-a55b",
-        label: "Nemotron 3 Ultra 550B A55B",
-      },
-      {
-        id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-        label: "Nemotron 3 Nano Omni 30B A3B",
-      },
-      { id: "deepseek-ai/deepseek-v4-pro", label: "DeepSeek V4 Pro" },
-      { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
-      { id: "moonshotai/kimi-k2.6", label: "Kimi K2.6" },
-    ],
-  },
-  openai: {
-    apiKeyEnvKey: OPENAI_API_KEY_ENV_KEY,
-    label: "OpenAI",
-    modelOptions: OPENAI_MODEL_OPTIONS,
-  },
-  "openai-chatgpt": {
-    apiKeyEnvKey: OPENAI_CHATGPT_ACCESS_TOKEN_ENV_KEY,
-    authMethod: "oauth",
-    label: "OpenAI (ChatGPT login)",
-    modelOptions: OPENAI_MODEL_OPTIONS,
-  },
-  "openai-compatible": {
-    apiKeyEnvKey: OPENAI_COMPATIBLE_API_KEY_ENV_KEY,
-    baseUrlEnvKey: OPENAI_COMPATIBLE_BASE_URL_ENV_KEY,
-    requiresBaseUrl: true,
-    label: "OpenAI-compatible",
-    modelOptions: [],
-  },
-  anthropic: {
-    apiKeyEnvKey: ANTHROPIC_API_KEY_ENV_KEY,
-    baseUrlEnvKey: ANTHROPIC_BASE_URL_ENV_KEY,
-    label: "Anthropic",
-    modelOptions: [
-      { id: "claude-haiku-4-5", label: "Haiku" },
-      { id: "claude-sonnet-5", label: "Sonnet" },
-      { id: "claude-opus-4-8", label: "Opus" },
-    ],
-  },
-  gemini: {
-    apiKeyEnvKey: GEMINI_API_KEY_ENV_KEY,
-    label: "Gemini (AI Studio)",
-    modelOptions: GEMINI_MODELS,
-  },
-  "gemini-enterprise": {
-    // Keyless: authenticated by Google Application Default Credentials against a
-    // Cloud project + location, not an API key. Routes by model family to the
-    // right Model Garden surface (Gemini, Claude, or OpenAI-compatible MaaS);
-    // see createGeminiEnterpriseModel / resolveVertexSurface.
-    projectEnvKey: GOOGLE_CLOUD_PROJECT_ENV_KEY,
-    locationEnvKey: GOOGLE_CLOUD_LOCATION_ENV_KEY,
-    defaultLocation: DEFAULT_VERTEX_LOCATION,
-    label: "Gemini Enterprise (Vertex AI)",
-    // Google's own Gemini models plus the curated Claude Model Garden IDs. Other
-    // partner/open-weight (MaaS) models are reached by pasting their model ID.
-    modelOptions: [
-      ...GEMINI_MODELS,
-      { id: "claude-haiku-4-5@20251001", label: "Claude Haiku" },
-      { id: "claude-sonnet-5", label: "Claude Sonnet" },
-      { id: "claude-opus-4-8", label: "Claude Opus" },
-    ],
-  },
-  openrouter: {
-    apiKeyEnvKey: OPENROUTER_API_KEY_ENV_KEY,
-    baseURL: OPENROUTER_BASE_URL,
-    label: "OpenRouter",
-    modelOptions: [
-      { id: "z-ai/glm-5.2", label: "GLM 5.2" },
-      { id: "openrouter/fusion", label: "OpenRouter Fusion" },
-      { id: "moonshotai/kimi-k2.7-code", label: "Kimi K2.7 Code" },
-      { id: "anthropic/claude-opus-4-8", label: "Claude Opus" },
-      { id: "anthropic/claude-sonnet-5", label: "Claude Sonnet" },
-      { id: "openai/gpt-5.4-mini", label: "GPT 5.4 mini" },
-      { id: "openai/gpt-5.5", label: "GPT 5.5" },
-    ],
   },
 };
 
@@ -429,19 +244,15 @@ export function resolveProviderLocation(
 
 /**
  * A human-readable hint for providers whose credentials live outside the
- * OpenWiki env file, appended to missing-credential error messages.
+ * OpenWiki env file, appended to missing-credential error messages. Keeps a
+ * `provider` parameter for API-shape consistency with the rest of the
+ * pluggable provider abstraction, even though the sole remaining provider
+ * (claude-cli) never needs a hint.
  */
 export function getProviderCredentialHint(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   provider: OpenWikiProvider,
 ): string | null {
-  if (provider === "gemini-enterprise") {
-    return (
-      "Authenticate to Google Cloud with Application Default Credentials " +
-      "(gcloud auth application-default login) or set " +
-      `${GOOGLE_APPLICATION_CREDENTIALS_ENV_KEY} to a service account key file.`
-    );
-  }
-
   return null;
 }
 
@@ -556,28 +367,7 @@ export function isValidProvider(value: string): value is OpenWikiProvider {
 export function resolveConfiguredProvider(
   env: NodeJS.ProcessEnv = process.env,
 ): OpenWikiProvider {
-  return (
-    normalizeProvider(env[OPENWIKI_PROVIDER_ENV_KEY]) ??
-    (env[OPENAI_API_KEY_ENV_KEY]
-      ? "openai"
-      : env[OPENAI_COMPATIBLE_API_KEY_ENV_KEY]
-        ? "openai-compatible"
-        : env[OPENROUTER_API_KEY_ENV_KEY]
-          ? "openrouter"
-          : env[ANTHROPIC_API_KEY_ENV_KEY]
-            ? "anthropic"
-            : env[BASETEN_API_KEY_ENV_KEY]
-              ? "baseten"
-              : env[FIREWORKS_API_KEY_ENV_KEY]
-                ? "fireworks"
-                : env[NEBIUS_API_KEY_ENV_KEY]
-                  ? "nebius"
-                  : env[NVIDIA_API_KEY_ENV_KEY]
-                    ? "nvidia"
-                    : env[BEDROCK_AWS_ACCESS_KEY_ID_ENV_KEY]
-                      ? "bedrock"
-                      : DEFAULT_PROVIDER)
-  );
+  return normalizeProvider(env[OPENWIKI_PROVIDER_ENV_KEY]) ?? DEFAULT_PROVIDER;
 }
 
 export function resolveProviderRetryAttempts(

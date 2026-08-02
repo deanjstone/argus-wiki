@@ -39,7 +39,6 @@ export type OpenWikiRunOptions = {
   outputMode?: OpenWikiOutputMode;
   threadId?: string;
   userMessage?: string | null;
-  telemetryFile?: string;
 };
 
 export type UpdateMetadata = {

@@ -52,18 +52,12 @@ personal brain wiki.
 Then to ensure your documentation stays up-to-date, add the CI workflow for your Git provider to automatically open a PR or merge request with documentation updates:
 
 - GitHub Actions: copy [openwiki-update.yml](./examples/openwiki-update.yml) into `.github/workflows/openwiki-update.yml`.
-- GitLab CI: copy [openwiki-update.gitlab-ci.yml](./examples/openwiki-update.gitlab-ci.yml) into `.gitlab-ci.yml` or include it from your existing GitLab pipeline.
-- Bitbucket Pipelines: copy [openwiki-update.bitbucket-pipelines.yml](./examples/openwiki-update.bitbucket-pipelines.yml) into `bitbucket-pipelines.yml`, then schedule the `openwiki-update` custom pipeline from Repository settings > Pipelines > Schedules.
 
 For repository documentation in GitHub Actions, use
 `openwiki code --update --print`. You do not need to run `--init` in CI:
 `--update` will create the initial `openwiki/` docs if they do not exist yet, as
 long as the workflow provides the required provider and model environment
 variables.
-
-Scheduled/CI runs send anonymous reliability telemetry. See [Telemetry](#telemetry)
-for what is collected and how to turn it off (uncomment `OPENWIKI_TELEMETRY_DISABLED`
-in the example workflow).
 
 ## Usage
 
@@ -356,54 +350,6 @@ OPENWIKI_PROVIDER_RETRY_ATTEMPTS=3
 The value must be a positive integer. If the value is unset, OpenWiki defaults to 3 retries.
 
 If there's an inference provider or model you'd like to see added, please open a PR!
-
-## Telemetry
-
-OpenWiki collects anonymous, aggregate usage data so we can understand how the
-tool is used and improve it. Telemetry is on by default and easy to turn off.
-
-**What is collected**, on a single `openwiki_run` event, keyed by a random
-install ID stored locally in `~/.openwiki/install-id`:
-
-- Every run: the command (init / update) and the outcome (success / failure /
-  no-op), plus a coarse error category on failure (never the error message).
-  Interactive chat, `auth`, and `ingest` are not recorded.
-- At setup (on init only): which brain mode (code / personal), the model
-  provider, and which connectors you configured (connector names only, never
-  their contents).
-
-**What is never collected:** file contents, repository data or names,
-credentials, prompts, model output, connector payloads, error messages, file
-paths, URLs, model IDs, run duration, your IP address, or any personal
-information. Geoip enrichment is disabled and your IP is never stored. Events
-are grouped by your random install ID so we can measure repeat usage, but that
-ID contains no personal data.
-
-**Scheduled/CI runs** are collected as anonymous reliability data (tagged so
-they can be told apart from human runs), under a shared CI identifier rather than
-a per-machine install ID, and never counted as distinct installs. To disable in
-CI, set `OPENWIKI_TELEMETRY_DISABLED=1` in your workflow environment.
-
-To see exactly what a run would send, add `--telemetry-file=<path>` to any run.
-
-### Opting out
-
-Set either environment variable:
-
-```sh
-export OPENWIKI_TELEMETRY_DISABLED=1
-# or the cross-tool standard:
-export DO_NOT_TRACK=1
-```
-
-To disable permanently, add `OPENWIKI_TELEMETRY_DISABLED=1` to `~/.openwiki/.env`.
-In CI, set it in the workflow environment (config files do not persist on
-ephemeral runners).
-
-### Seeing exactly what is sent
-
-Add `--telemetry-file=<path>` to any run to also write the exact payload to a
-local JSON file.
 
 ## Contributing
 
