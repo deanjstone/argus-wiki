@@ -55,8 +55,7 @@ describe("evaluateWritePath", () => {
     const decision = evaluateWritePath({
       repoRoot,
       allowedRelativeDir: "openwiki",
-      filePath:
-        "/home/deanj/projects/argus-wiki/openwiki/../../../etc/passwd",
+      filePath: "/home/deanj/projects/argus-wiki/openwiki/../../../etc/passwd",
     });
     expect(decision.allowed).toBe(false);
   });
