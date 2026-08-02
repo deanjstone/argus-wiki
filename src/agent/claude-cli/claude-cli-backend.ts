@@ -9,7 +9,10 @@ import {
   createRunContext,
   persistRunMetadataIfChanged,
 } from "../utils.js";
-import { createClaudeCliSystemPrompt, createClaudeCliUserPrompt } from "./prompt.js";
+import {
+  createClaudeCliSystemPrompt,
+  createClaudeCliUserPrompt,
+} from "./prompt.js";
 import type {
   OpenWikiCommand,
   OpenWikiRunOptions,
