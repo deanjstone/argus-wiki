@@ -14,7 +14,7 @@ OpenWiki has four operational concerns that matter for both users and maintainer
 3. persisted onboarding/schedule metadata in `~/.openwiki/onboarding.json`,
 4. persisted update metadata in `openwiki/.last-update.json`.
 
-It also ships with GitHub Actions and GitLab CI workflow examples for scheduled updates.
+It also ships a GitHub Actions workflow example for scheduled updates (no GitLab CI or Bitbucket Pipelines example in this fork).
 
 ## Installation notes
 
@@ -151,13 +151,9 @@ saved repeat `pmset` schedule and marks the saved wake window disabled.
 
 ## Provider resolution
 
-`resolveConfiguredProvider()` in `src/constants.ts` determines the active provider:
+This is a hard fork: upstream's multi-provider fallback chain was removed along with the providers themselves. `resolveConfiguredProvider()` in `src/constants.ts` is now a one-line resolver: `normalizeProvider(env.OPENWIKI_PROVIDER) ?? DEFAULT_PROVIDER`. Since `PROVIDER_CONFIGS` (and therefore `isValidProvider()`) only recognizes `claude-cli`, this always resolves to `claude-cli` regardless of what `OPENWIKI_PROVIDER` is set to — there is no more API-key-based fallback order to pick among OpenAI/OpenRouter/Anthropic/etc.
 
-1. If `OPENWIKI_PROVIDER` is set and valid, use it.
-2. Otherwise, use the first available provider API key in this order: OpenAI, OpenAI-compatible, OpenRouter, Anthropic, Baseten, Fireworks, then NVIDIA.
-3. Otherwise, fall back to `DEFAULT_PROVIDER` (`openai`) and its default model (`gpt-5.6-terra`).
-
-`needsCredentialSetup()` in `src/credentials.tsx` checks whether the provider env var is valid and whether the provider's required credentials (its API key, or `GOOGLE_CLOUD_PROJECT` for vertex — via `getMissingProviderEnvKey()` in `src/constants.ts`), a model ID (unless overridden), and a LangSmith key are all present. Any missing value or invalid provider triggers the interactive flow.
+`needsCredentialSetup()` in `src/credentials.tsx` checks whether the provider env var is valid and whether the provider's required credentials (via `getMissingProviderEnvKey()` in `src/constants.ts` — always `null` for `claude-cli`, which has no `apiKeyEnvKey`/`projectEnvKey`), a model ID (unless overridden), and a LangSmith key are all present. In practice, for `claude-cli` this reduces to the model-ID and LangSmith checks, since there's no provider credential to be missing.
 
 ## Model and credential diagnostics
 
@@ -188,44 +184,20 @@ Update runs use this metadata to build a change summary since the previous succe
 
 ## Scheduled CI workflows
 
-The repository includes `examples/openwiki-update.yml` as a copyable GitHub Actions scheduled update workflow. It:
+This repository ships a single copyable CI example, `examples/openwiki-update.yml` (a GitHub Actions workflow) — there is no GitLab CI or Bitbucket Pipelines example in this fork. It:
 
 - runs on schedule (daily at 08:00 UTC) and on manual dispatch,
-- checks out the repository,
+- checks out the repository on `ubuntu-latest`,
 - installs Node.js 22,
 - installs OpenWiki globally,
-- runs `openwiki code --update --print`,
-- passes `OPENROUTER_API_KEY`, `OPENWIKI_MODEL_ID`, and `LANGSMITH_API_KEY` from GitHub secrets,
+- runs `openwiki code --update --print` with `OPENWIKI_PROVIDER: claude-cli` — no provider API key secret is needed, since `claude-cli` is keyless,
 - classifies the resulting `openwiki/` diff as **structural** or **routine**,
 - opens a pull request with `peter-evans/create-pull-request` scoped to the `openwiki` directory, `AGENTS.md`, `CLAUDE.md`, and the workflow file itself, with the classification and reason in the PR body,
 - auto-merges the PR (`gh pr merge --auto --squash`) only when the classification is routine.
 
-The classification step treats a change as **structural** — left for manual review — when it touches the workflow file itself, adds new file(s) under `openwiki/`, adds a new `##`/`###` heading, or changes a markdown link; everything else (prose-only edits to existing pages) is **routine** and auto-merges. The workflow file is force-classified structural unconditionally, so a change to the automation itself can never be silently auto-merged even though it stays in `add-paths` to support first-time setup. This repository's own `.github/workflows/openwiki-update.yml` runs the identical classify/auto-merge logic against a self-hosted runner and the `claude-cli` provider instead of `openrouter`.
+The classification step treats a change as **structural** — left for manual review — when it touches the workflow file itself, adds new file(s) under `openwiki/`, adds a new `##`/`###` heading, or changes a markdown link; everything else (prose-only edits to existing pages) is **routine** and auto-merges. The workflow file is force-classified structural unconditionally, so a change to the automation itself can never be silently auto-merged even though it stays in `add-paths` to support first-time setup. This repository's own `.github/workflows/openwiki-update.yml` runs the identical classify/auto-merge logic against a self-hosted runner (`[self-hosted, homelab]`) instead of `ubuntu-latest`, but the same `claude-cli` provider.
 
 The workflow is a good reference for automated maintenance. The repo also contains a `checks.yml` workflow for CI (lint/format checks).
-
-The repository also includes `examples/openwiki-update.gitlab-ci.yml` as a copyable GitLab CI scheduled update job. It:
-
-- runs from a scheduled pipeline or a manually triggered web pipeline,
-- installs OpenWiki globally in a Node.js 22 container,
-- runs `openwiki code --update --print`,
-- skips the rest of the job when `openwiki/` did not change,
-- commits changes to a generated `openwiki/update-$CI_PIPELINE_ID` branch,
-- pushes that branch back to the GitLab project, and
-- creates a merge request targeting the project's default branch through the GitLab API.
-
-GitLab users should configure protected CI/CD variables for the model provider key, for example `OPENROUTER_API_KEY`, and `OPENWIKI_GITLAB_TOKEN`. The GitLab token needs permission to push a branch and create merge requests in the target project.
-
-The repository also includes `examples/openwiki-update.bitbucket-pipelines.yml` as a copyable Bitbucket Pipelines scheduled update job. It:
-
-- runs on a custom schedule or manual trigger,
-- installs OpenWiki globally in a Node.js 22 container,
-- runs `openwiki code --update --print`,
-- commits changes to a generated `openwiki/update-$BITBUCKET_BUILD_NUMBER` branch,
-- pushes that branch back to the Bitbucket repository, and
-- creates a pull request targeting the default branch through the Bitbucket API.
-
-Bitbucket users should configure repository variables for the model provider key (for example `OPENROUTER_API_KEY`) and `OPENWIKI_BITBUCKET_TOKEN`. The Bitbucket token needs write permission to push a branch and create pull requests in the target repository.
 
 ## Things to watch when changing operations
 
@@ -233,8 +205,9 @@ Bitbucket users should configure repository variables for the model provider key
 - Never document real secret values; only document the presence and purpose of the configuration.
 - If update metadata semantics change, update both the agent runtime and the docs that explain how update runs are scoped.
 - Scheduled automation depends on the same CLI entrypoint as local users, so workflow changes should be validated against `package.json` and the CLI help text.
-- When adding a provider, update `managedEnvKeys` in `src/env.ts` so the env file is formatted correctly and diagnostics cover the new key. Providers without an API key (like vertex) declare their required env keys in `PROVIDER_CONFIGS` (e.g. `projectEnvKey`) and are gated by `getMissingProviderEnvKey()`.
+- When adding a provider, update `MANAGED_ENV_KEYS` in `src/env.ts` so the env file is formatted correctly and diagnostics cover the new key. Providers without an API key declare their required env keys in `PROVIDER_CONFIGS` (e.g. `projectEnvKey`) and are gated by `getMissingProviderEnvKey()` — though today `claude-cli` needs neither.
 - The content-snapshot check means CI runs that produce no changes will not update `.last-update.json` or open a PR with metadata-only changes.
+- `MANAGED_ENV_KEYS` in `src/env.ts` still lists env keys for providers that no longer have an implementation behind them (Baseten, Fireworks, Nebius, NVIDIA, OpenAI, ChatGPT OAuth, OpenAI-compatible, Anthropic, Gemini, Google Cloud, OpenRouter, Bedrock) — setting them has no effect on which provider runs, since `PROVIDER_CONFIGS` only implements `claude-cli`.
 
 ## Source map
 
@@ -244,7 +217,6 @@ Bitbucket users should configure repository variables for the model provider key
 - `src/constants.ts`
 - `src/agent/utils.ts`
 - `src/agent/index.ts`
-- `src/agent/openai-chatgpt-oauth.ts`
 - `src/auth/oauth.ts`
 - `src/auth/providers.ts`
 - `src/auth/configure.ts`
@@ -253,8 +225,6 @@ Bitbucket users should configure repository variables for the model provider key
 - `src/schedules.ts`
 - `src/code-mode.ts`
 - `examples/openwiki-update.yml`
-- `examples/openwiki-update.gitlab-ci.yml`
-- `examples/openwiki-update.bitbucket-pipelines.yml`
 - `.github/workflows/openwiki-update.yml`
 - `README.md`
 - Git evidence: commits `ceded10`, `f89b05d`, `8278c36`, `0fa1430`, `148a0b9`

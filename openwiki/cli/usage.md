@@ -44,7 +44,7 @@ When explicit init (`openwiki personal --init` or `openwiki code --init`) or `--
 
 ### Non-interactive mode
 
-If stdin is not a TTY (e.g. CI), or `--print` is used, the CLI requires the provider's credentials to be already saved in `~/.openwiki/.env` or present in the environment — the provider API key, or `GOOGLE_CLOUD_PROJECT` for the vertex provider. It will error with a clear message if the value is missing, rather than prompting interactively.
+If stdin is not a TTY (e.g. CI), or `--print` is used, the CLI requires the provider's credentials to be already saved in `~/.openwiki/.env` or present in the environment. In practice this is a no-op today: `claude-cli` is the only provider, is keyless, and requires no API key or GCP project — it just needs the `claude` CLI itself installed and authenticated in the run environment. It will error with a clear message if a genuinely required value is missing, rather than prompting interactively.
 
 ## Interactive behavior
 
@@ -62,100 +62,32 @@ The UI persists provider and model selection back to `~/.openwiki/.env` through 
 
 ## Credentials and onboarding
 
-The first interactive run can prompt for:
+This fork removed upstream OpenWiki's hosted-model providers (OpenAI, OpenRouter, Anthropic, Baseten, Fireworks, NVIDIA, Vertex AI, and their ChatGPT-OAuth/API-key setup steps). `claude-cli` — spawning the operator's own already-authenticated `claude` CLI — is the only provider, and it is keyless, so there is no provider or API-key prompt to walk through in onboarding.
 
-- a **provider** (`OPENWIKI_PROVIDER`) — openai, openai-chatgpt, openrouter, baseten, fireworks, nvidia, openai-compatible, anthropic, or vertex (the `claude-cli` provider is keyless and deliberately excluded from this interactive list — see [Claude Code CLI provider](#claude-code-cli-provider) below),
-- the **provider API key** (e.g. `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`, `ANTHROPIC_API_KEY`, `BASETEN_API_KEY`, `FIREWORKS_API_KEY`) — skipped for the vertex provider, which instead prompts for a **GCP project** (`GOOGLE_CLOUD_PROJECT`, required) and a **GCP location** (`GOOGLE_CLOUD_LOCATION`, optional, defaults to `global`),
-- a **base URL** for providers that require one (the openai-compatible provider prompts for `OPENAI_COMPATIBLE_BASE_URL`),
-- a **model ID** stored as `OPENWIKI_MODEL_ID` — chosen from the provider's model list or a custom ID,
+The first interactive run can still prompt for:
+
+- a **model ID** stored as `OPENWIKI_MODEL_ID` — optional; if set, it's passed through to `claude --model`,
 - optional `LANGSMITH_API_KEY` for tracing.
 
-If a LangSmith key is provided, onboarding also enables `LANGCHAIN_PROJECT=openwiki` and `LANGCHAIN_TRACING_V2=true`.
-
-`src/credentials.tsx` determines whether setup is needed and walks the user through the missing values using arrow-key selection menus for provider and model. See [Credentials and updates](../operations/credentials-and-updates.md) for details.
+`src/credentials.tsx` determines whether setup is needed (`needsCredentialSetup()`) and walks the user through any missing values. See [Credentials and updates](../operations/credentials-and-updates.md) for details.
 
 ## Provider and model selection
 
-Providers and their model options are defined in `PROVIDER_CONFIGS` in `src/constants.ts`:
+`PROVIDER_CONFIGS` in `src/constants.ts` has a single entry:
 
-| Provider          | Env key                                             | Base URL                                       | Models                                                                |
-| ----------------- | --------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------- |
-| openai            | `OPENAI_API_KEY`                                    | (default)                                      | 5.6 Terra, 5.6 Luna, 5.6 Sol, 5.5, 5.4 mini                           |
-| openai-chatgpt    | `OPENAI_CHATGPT_ACCESS_TOKEN`                       | (Codex backend)                                | Same as openai (OAuth login, no API key)                              |
-| openrouter        | `OPENROUTER_API_KEY`                                | `https://openrouter.ai/api/v1`                 | GLM 5.2, Fusion, Kimi K2.7 Code, Claude Opus/Sonnet, GPT 5.4 mini/5.5 |
-| baseten           | `BASETEN_API_KEY`                                   | `https://inference.baseten.co/v1`              | GLM 5.2, Kimi K2.7 Code                                               |
-| fireworks         | `FIREWORKS_API_KEY`                                 | `https://api.fireworks.ai/inference/v1`        | GLM 5.2, Kimi K2.7 Code                                               |
-| nvidia            | `NVIDIA_API_KEY`                                    | `https://integrate.api.nvidia.com/v1`          | Nemotron 3 Super/Ultra/Nano, DeepSeek V4 Pro, GPT-OSS 120B, Kimi K2.6 |
-| openai-compatible | `OPENAI_COMPATIBLE_API_KEY`                         | `OPENAI_COMPATIBLE_BASE_URL` (required)        | custom model ID only                                                  |
-| anthropic         | `ANTHROPIC_API_KEY`                                 | (default, or `ANTHROPIC_BASE_URL`)             | Haiku, Sonnet, Opus                                                   |
-| vertex            | none (Google ADC) — `GOOGLE_CLOUD_PROJECT` required | per `GOOGLE_CLOUD_LOCATION` (default `global`) | Haiku, Sonnet, Opus (Claude on Vertex AI)                             |
+| Provider   | Env key        | Base URL                    | Models                                                               |
+| ---------- | -------------- | ---------------------------- | --------------------------------------------------------------------- |
+| claude-cli | none (keyless) | none (subprocess, not HTTP) | none preset — `OPENWIKI_MODEL_ID` passes through to `claude --model` |
 
-The default provider is `openai`, and the default model is `gpt-5.6-terra`. `resolveConfiguredProvider()` picks the provider from `OPENWIKI_PROVIDER`, then falls back to the first configured provider API key in this order: OpenAI, OpenAI-compatible, OpenRouter, Anthropic, Baseten, Fireworks, NVIDIA, and finally `DEFAULT_PROVIDER`. `claude-cli` is never picked by this fallback order — it only runs when `OPENWIKI_PROVIDER=claude-cli` is set explicitly.
+`claude-cli` is both `DEFAULT_PROVIDER` and the only value `isValidProvider()` accepts, so `resolveConfiguredProvider()` resolves to it whether or not `OPENWIKI_PROVIDER` is set. The upstream fallback-through-API-keys logic (try OpenAI, then OpenRouter, then Anthropic, etc.) no longer exists — `resolveConfiguredProvider()` is now a one-line env-var-or-default lookup.
 
 ### Claude Code CLI provider
 
-Setting `OPENWIKI_PROVIDER=claude-cli` runs OpenWiki against the operator's own already-authenticated `claude` CLI binary as a subprocess instead of calling a hosted API. There is no API key, base URL, or model list to configure — `OPENWIKI_MODEL_ID`, if set, is passed through to `claude --model`. It requires the `claude` CLI to be installed and signed in on the machine running OpenWiki, which makes it a good fit for a self-hosted CI runner under an operator's account rather than the interactive onboarding flow. It only supports `repository` output mode. See [Agent workflow: Claude Code CLI provider](../agent/workflow.md#claude-code-cli-provider) for the execution details, including how the docs-only write restriction is enforced for this path.
+OpenWiki runs against the operator's own already-authenticated `claude` CLI binary as a subprocess instead of calling a hosted API. There is no API key, base URL, or model list to configure — `OPENWIKI_MODEL_ID`, if set, is passed through to `claude --model`. It requires the `claude` CLI to be installed and signed in on the machine running OpenWiki, which makes it a good fit for a self-hosted CI runner under an operator's account. It only supports `repository` output mode. `SELECTABLE_OPENWIKI_PROVIDERS` is empty (`claude-cli` is deliberately excluded since there's no setup step to select), so the interactive provider-picker menu currently has nothing to show. See [Agent workflow: Claude Code CLI provider](../agent/workflow.md#claude-code-cli-provider) for the execution details, including how the docs-only write restriction is enforced for this path.
 
 ### Provider retry attempts
 
-Set `OPENWIKI_PROVIDER_RETRY_ATTEMPTS` to override the number of retries after
-the first provider request. The value must be a positive integer:
-
-```bash
-OPENWIKI_PROVIDER_RETRY_ATTEMPTS=3
-```
-
-If the value is unset, OpenWiki defaults to 3 retries.
-
-### Alternative base URLs
-
-Set `ANTHROPIC_BASE_URL` to route the anthropic provider at an alternative,
-Anthropic-compatible endpoint (for example a self-hosted or proxied gateway)
-instead of the default API. When set, it is passed to `ChatAnthropic` as
-`anthropicApiUrl`; the `ANTHROPIC_API_KEY` is still sent as the request
-credential.
-
-### OpenAI-compatible provider
-
-The `openai-compatible` provider targets any OpenAI-compatible chat-completions
-endpoint. It has no default endpoint, so `OPENAI_COMPATIBLE_BASE_URL` is
-**required** (the interactive setup prompts for it, and a run aborts early if it
-is missing). This is useful for OpenAI-compatible LLM endpoints such as those
-exposed by a LiteLLM gateway, which lets you reach whatever upstream providers
-the gateway fronts through a single OpenAI-shaped API.
-Because the provider has no preset model
-list, set `OPENWIKI_MODEL_ID` (or pick "custom model ID" in setup) to whatever
-name the gateway exposes.
-
-```bash
-OPENWIKI_PROVIDER=openai-compatible
-OPENAI_COMPATIBLE_API_KEY=<gateway key>
-OPENAI_COMPATIBLE_BASE_URL=https://<gateway>/v1
-OPENWIKI_MODEL_ID=<model name the gateway exposes>
-```
-
-Base URLs are resolved by `resolveProviderBaseUrl()` in `src/constants.ts`, which
-prefers a provider's `baseUrlEnvKey` override over the built-in default.
-
-### Google Vertex AI (Claude) provider
-
-The `vertex` provider runs Claude models through Google Vertex AI using the
-existing `ChatAnthropic` class with a custom `AnthropicVertex` client
-(`@anthropic-ai/vertex-sdk`). It has **no API key**: authentication uses Google
-Application Default Credentials (a service account key via
-`GOOGLE_APPLICATION_CREDENTIALS`, `gcloud auth application-default login`, or
-workload identity). `GOOGLE_CLOUD_PROJECT` is required;
-`GOOGLE_CLOUD_LOCATION` is optional and defaults to `global` (resolved by
-`resolveProviderLocation()` in `src/constants.ts`).
-
-```bash
-OPENWIKI_PROVIDER=vertex
-GOOGLE_CLOUD_PROJECT=<gcp project id>
-GOOGLE_CLOUD_LOCATION=global   # optional
-```
-
-Vertex Claude model IDs may carry an `@`-versioned suffix (for example
-`claude-haiku-4-5@20251001`), which the model-ID validator accepts.
+`OPENWIKI_PROVIDER_RETRY_ATTEMPTS` is still validated (`resolveProviderRetryAttempts()` in `src/constants.ts` requires a positive integer, defaulting to 3), but nothing in the current runtime consumes it — the `claude-cli` backend spawns the CLI once per run with no retry loop. Setting it has no observable effect today; it's a leftover from the removed LangChain-backed providers.
 
 ## Help text and validation
 
@@ -170,9 +102,7 @@ The help content is centralized in `src/commands.ts` and is used by the CLI UI. 
 - Update parser behavior in `src/commands.ts` first.
 - Then update any user-visible text in `src/cli.tsx` and `README.md`.
 - If new options affect run behavior, make sure `src/agent/index.ts` and `src/credentials.tsx` still receive the right inputs.
-- If adding a provider, update `PROVIDER_CONFIGS` and `SELECTABLE_OPENWIKI_PROVIDERS` in `src/constants.ts`, `managedEnvKeys` in `src/env.ts`, and the `createModel` branch in `src/agent/index.ts`. OAuth-based providers (like `openai-chatgpt`) additionally need a token refresh flow and a dedicated branch in `createModel` that reads tokens from `process.env`. `apiKeyEnvKey` is optional — a provider without one (like `vertex`) instead declares the env keys it needs (e.g. `projectEnvKey`), and `getMissingProviderEnvKey()` gates runs on whichever required key is absent.
-- To let a provider accept an alternative base URL, set `baseUrlEnvKey` on its `PROVIDER_CONFIGS` entry, add that key to `managedEnvKeys` in `src/env.ts`, and read it through `resolveProviderBaseUrl()` in the provider's `createModel` branch.
-- To require a user-supplied base URL (a provider with no default endpoint, like `openai-compatible`), also set `requiresBaseUrl: true`. `ensureProviderBaseUrl()` in `src/agent/index.ts` enforces it at runtime, and the interactive setup adds a base-URL step for such providers.
+- If adding a provider, add a `PROVIDER_CONFIGS` entry and `MANAGED_ENV_KEYS` entries in `src/env.ts` for any new env keys — but also plan a new execution path analogous to `src/agent/claude-cli/`, since there is no `createModel` branch point to hook a hosted-model client into anymore.
 - Re-check the `package.json` bin entry and scripts if the entrypoint changes.
 
 ## Source map
@@ -183,7 +113,6 @@ The help content is centralized in `src/commands.ts` and is used by the CLI UI. 
 - `src/constants.ts`
 - `src/env.ts`
 - `src/agent/index.ts`
-- `src/agent/openai-chatgpt-oauth.ts`
 - `src/auth/oauth.ts`
 - `src/auth/providers.ts`
 - `src/auth/configure.ts`
