@@ -13,11 +13,11 @@ OpenWiki is a TypeScript CLI that writes and maintains documentation for a repos
 
 - Launches an interactive Ink-based terminal app for chatting with the OpenWiki agent.
 - Supports one-shot documentation runs with `--init`, `--update`, and `--print`.
-- Supports multiple model providers — OpenAI (default, API key or ChatGPT OAuth login), OpenRouter, Anthropic, Baseten, Fireworks, NVIDIA NIM, any OpenAI-compatible gateway, and Google Vertex AI (Claude models) — each with their own credentials and model list (Vertex uses Google ADC instead of an API key).
-- Uses a DeepAgents local shell backend with virtual filesystem paths rooted at the target repository.
+- Runs a single, keyless model provider: `claude-cli`. This fork removed the upstream multi-provider system (OpenAI, OpenRouter, Anthropic, Baseten, Fireworks, NVIDIA NIM, Vertex AI, and the DeepAgents/LangChain execution core) — see [Agent workflow](./agent/workflow.md) and [CLI usage](./cli/usage.md). `src/constants.ts`'s provider abstraction (`OpenWikiProvider`, `PROVIDER_CONFIGS`) is still pluggable in shape, just narrowed to one member.
+- Spawns the operator's already-authenticated `claude` CLI binary as a subprocess for every run, instead of calling a hosted model API. A `PreToolUse` hook enforces the docs-only write restriction out of band (see [Agent workflow](./agent/workflow.md#claude-code-cli-provider)).
 - Creates or refreshes documentation under the target repository's `openwiki/` directory.
 - Auto-exits after successful `--init` or `--update` runs in an interactive terminal, so the CLI works as both a one-shot and interactive tool.
-- Optionally schedules automated updates through GitHub Actions, GitLab CI, or Bitbucket Pipelines.
+- Optionally schedules automated updates through GitHub Actions (the only CI provider this fork ships an example for; see `examples/openwiki-update.yml`).
 
 ## Start here
 
@@ -33,13 +33,11 @@ OpenWiki is a TypeScript CLI that writes and maintains documentation for a repos
 - `package.json` — bin entrypoint, scripts, and dependencies.
 - `src/cli.tsx` — Ink UI, command execution, auto-exit, and run lifecycle.
 - `src/commands.ts` — CLI parsing and help content.
-- `src/agent/index.ts` — agent runtime, provider-specific model creation (including ChatGPT OAuth), fallback, and metadata writes.
+- `src/agent/index.ts` — agent runtime entrypoint: loads env/skills, checks the update no-op condition, resolves the (single) provider for logging, and delegates every command unconditionally to `runClaudeCliAgent()`.
 - `src/agent/prompt.ts` — prompt assembly, documentation-run instructions, and AGENTS.md/CLAUDE.md insertion rules.
 - `src/agent/utils.ts` — git evidence collection, content snapshot, and `.last-update.json` handling.
 - `src/agent/types.ts` — shared agent types (`OpenWikiCommand`, `RunContext`, `UpdateMetadata`, run options/events).
-- `src/agent/docs-only-backend.ts` — `OpenWikiLocalShellBackend`, extends DeepAgents `LocalShellBackend` with docs-only write guards and output-mode awareness.
-- `src/agent/openai-chatgpt-oauth.ts` — ChatGPT OAuth flow, token persistence, and refresh logic for the `openai-chatgpt` provider.
-- `src/agent/claude-cli/` — keyless `claude-cli` provider backend: spawns the operator's authenticated `claude` CLI as a subprocess instead of calling a hosted API, with its own prompt builder and an out-of-band `PreToolUse` write guard. See [Agent workflow](./agent/workflow.md#claude-code-cli-provider).
+- `src/agent/claude-cli/` — the only provider backend: spawns the operator's authenticated `claude` CLI as a subprocess instead of calling a hosted API, with its own prompt builder and an out-of-band `PreToolUse` write guard. See [Agent workflow](./agent/workflow.md#claude-code-cli-provider).
 - `src/auth/oauth.ts` — generic OAuth runner for connector providers (Gmail, Notion, Slack, X).
 - `src/auth/providers.ts` — connector OAuth provider configs (scopes, token URLs, env-key mappings).
 - `src/auth/configure.ts` — `openwiki auth configure <provider>` flow for creating local connector configs.
@@ -49,11 +47,9 @@ OpenWiki is a TypeScript CLI that writes and maintains documentation for a repos
 - `src/ingestion.ts` — orchestrates source ingestion runs across configured connectors.
 - `src/code-mode.ts` — `openwiki code` setup: writes GitHub Actions workflow and AGENTS.md/CLAUDE.md snippets.
 - `src/env.ts` — `~/.openwiki/.env` persistence and credential diagnostics; base directory is overridable via `OPENWIKI_HOME`.
-- `src/credentials.tsx` — interactive onboarding flow for provider selection, API keys, and model selection.
+- `src/credentials.tsx` — interactive onboarding flow; provider/API-key selection UI is largely vestigial now (`claude-cli` is the only, keyless provider), but optional model ID and LangSmith prompts are still active.
 - `src/constants.ts` — provider configs, model options, env keys, and validation helpers.
-- `examples/openwiki-update.yml` — GitHub Actions scheduled automation example.
-- `examples/openwiki-update.gitlab-ci.yml` — GitLab CI scheduled automation example.
-- `examples/openwiki-update.bitbucket-pipelines.yml` — Bitbucket Pipelines scheduled automation example.
+- `examples/openwiki-update.yml` — copyable GitHub Actions scheduled automation example (the only CI example this repo ships).
 
 ## Documentation map
 
@@ -68,7 +64,7 @@ OpenWiki is a TypeScript CLI that writes and maintains documentation for a repos
 - The repository is intentionally focused: the main product surface is the CLI plus the documentation-generation agent.
 - Treat `openwiki/` in this repo as generated documentation output from a future OpenWiki run, not as application source.
 - When changing behavior, verify both the CLI parser and the agent prompt/runtime, because user-visible semantics are split across `src/commands.ts`, `src/cli.tsx`, and `src/agent/*`.
-- Provider support is centralized in `src/constants.ts`. Adding or changing a provider means updating `PROVIDER_CONFIGS`, the `OpenWikiProvider` type, the `SELECTABLE_OPENWIKI_PROVIDERS` list, and the model-creation branch in `src/agent/index.ts`. OAuth-based providers also need an entry in `src/auth/` if they use browser-login flows.
+- Provider metadata still lives in `src/constants.ts` (`PROVIDER_CONFIGS`, `OpenWikiProvider`, `SELECTABLE_OPENWIKI_PROVIDERS`), but `claude-cli` is the only implemented provider — `runOpenWikiAgent()` in `src/agent/index.ts` unconditionally delegates to `runClaudeCliAgent()`, and there is no `createModel`/hosted-model code path to branch on anymore. Reintroducing a hosted-model provider would mean adding both the config entry and a new execution path, not just a config change.
 
 ## Source map
 
@@ -80,8 +76,6 @@ OpenWiki is a TypeScript CLI that writes and maintains documentation for a repos
 - `src/agent/prompt.ts`
 - `src/agent/utils.ts`
 - `src/agent/types.ts`
-- `src/agent/docs-only-backend.ts`
-- `src/agent/openai-chatgpt-oauth.ts`
 - `src/agent/claude-cli/claude-cli-backend.ts`
 - `src/agent/claude-cli/prompt.ts`
 - `src/agent/claude-cli/write-guard.ts`
@@ -112,6 +106,4 @@ OpenWiki is a TypeScript CLI that writes and maintains documentation for a repos
 - `src/credentials.tsx`
 - `src/constants.ts`
 - `examples/openwiki-update.yml`
-- `examples/openwiki-update.gitlab-ci.yml`
-- `examples/openwiki-update.bitbucket-pipelines.yml`
 - Git evidence: commits `ceded10`, `f89b05d`, `a82759f`, `dfa73cc`, `fd3a702`, `8278c36`, `0fa1430`, `070a382`, `5210cc4`, `9f2c252`, `7c3d1df`

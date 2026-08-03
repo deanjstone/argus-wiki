@@ -11,19 +11,17 @@ OpenWiki has a small but layered architecture:
 
 1. `src/cli.tsx` provides the interactive terminal application and orchestrates runs, including auto-exit for init/update.
 2. `src/commands.ts` parses argv and defines help text and supported options, including `auth`, `ngrok`, `cron`, and `ingest` subcommands.
-3. `src/credentials.tsx` manages interactive onboarding for provider selection, API keys, model selection, and optional LangSmith tracing.
-4. `src/env.ts` reads and writes `~/.openwiki/.env` and surfaces credential diagnostics for all supported providers.
-5. `src/agent/index.ts` runs the documentation agent, resolves the provider, creates the appropriate model client, collects Git context, and writes update metadata.
+3. `src/credentials.tsx` manages interactive onboarding — largely vestigial provider/API-key selection UI (there's nothing to pick since `claude-cli` is the only, keyless provider), plus a still-active optional model ID and LangSmith tracing prompt.
+4. `src/env.ts` reads and writes `~/.openwiki/.env` and surfaces credential diagnostics, including for provider env keys that no longer have an implemented provider behind them (see below).
+5. `src/agent/index.ts` runs the documentation agent: loads env/skills, resolves the (single) provider for logging, collects Git context, and unconditionally delegates to the `claude-cli` backend.
 6. `src/agent/prompt.ts` builds the system and user prompts that tell the model how to behave.
 7. `src/agent/utils.ts` gathers Git evidence, computes an OpenWiki content snapshot, and records `.last-update.json` after successful init/update runs.
-8. `src/agent/docs-only-backend.ts` provides `OpenWikiLocalShellBackend`, extending DeepAgents `LocalShellBackend` with docs-only write guards and output-mode awareness.
-9. `src/agent/openai-chatgpt-oauth.ts` implements the ChatGPT OAuth login flow, token persistence, and refresh for the `openai-chatgpt` provider.
-10. `src/auth/` contains the connector OAuth system: `oauth.ts` (generic runner), `providers.ts` (provider configs), `configure.ts` (`openwiki auth configure`), `ngrok.ts` (Slack HTTPS tunnel), `tokens.ts` (refresh/validation), and `types.ts`.
-11. `src/connectors/` contains the connector registry, MCP client/runtime, source-specific ingestion modules (git-repo, gmail, hackernews, slack, web-search, x), and tool definitions exposed to the agent.
-12. `src/ingestion.ts` orchestrates source ingestion runs across configured connectors.
-13. `src/code-mode.ts` handles `openwiki code` setup: writes a GitHub Actions workflow and AGENTS.md/CLAUDE.md snippets.
-14. `src/constants.ts` centralizes provider configs, model options, environment keys, validation helpers, and the wiki directory names.
-15. `src/agent/types.ts` defines shared types: `OpenWikiCommand`, `RunContext`, `UpdateMetadata`, and run option/event interfaces.
+8. `src/auth/` contains the connector OAuth system: `oauth.ts` (generic runner), `providers.ts` (provider configs), `configure.ts` (`openwiki auth configure`), `ngrok.ts` (Slack HTTPS tunnel), `tokens.ts` (refresh/validation), and `types.ts`.
+9. `src/connectors/` contains the connector registry, MCP client/runtime, source-specific ingestion modules (git-repo, gmail, hackernews, slack, web-search, x), and tool definitions exposed to the agent.
+10. `src/ingestion.ts` orchestrates source ingestion runs across configured connectors.
+11. `src/code-mode.ts` handles `openwiki code` setup: writes a GitHub Actions workflow and AGENTS.md/CLAUDE.md snippets.
+12. `src/constants.ts` centralizes provider configs, model options, environment keys, validation helpers, and the wiki directory names — narrowed to a single `claude-cli` provider (see below).
+13. `src/agent/types.ts` defines shared types: `OpenWikiCommand`, `RunContext`, `UpdateMetadata`, and run option/event interfaces.
 
 ## Runtime shape
 
@@ -45,27 +43,17 @@ For non-chat runs, the agent receives a `RunContext` that includes last-update m
 
 ### Provider and model resolution
 
-The agent runtime resolves the provider via `resolveConfiguredProvider()` in `src/constants.ts`:
+This is a hard fork of upstream OpenWiki with the multi-provider/DeepAgents system removed (see this repo's own `CLAUDE.md`). `src/constants.ts` still exposes a pluggable-shaped provider abstraction (`OpenWikiProvider`, `PROVIDER_CONFIGS`, `getProviderConfig()`, etc.), but it now has exactly one member:
 
-1. If `OPENWIKI_PROVIDER` is set and valid, use it.
-2. Otherwise, use the first available provider API key in this order: OpenAI, OpenAI-compatible, OpenRouter, Anthropic, Baseten, Fireworks, then NVIDIA.
-3. Otherwise, fall back to `DEFAULT_PROVIDER` (`openai`) and its default model (`gpt-5.6-terra`).
+- `OpenWikiProvider = "claude-cli"` — the only key in `PROVIDER_CONFIGS`.
+- `SELECTABLE_OPENWIKI_PROVIDERS = []` — `claude-cli` is deliberately excluded because it's keyless (no API key/OAuth step to walk a user through in interactive onboarding).
+- `resolveConfiguredProvider()` is now a one-line resolver: `normalizeProvider(env.OPENWIKI_PROVIDER) ?? DEFAULT_PROVIDER`. Since `normalizeProvider()` rejects any value not in `PROVIDER_CONFIGS`, this always resolves to `claude-cli` regardless of what `OPENWIKI_PROVIDER` is set to — there is no API-key-based fallback chain anymore.
 
-Model creation branches by provider in `src/agent/index.ts` (`createModel`):
+There is no `createModel()` function, no DeepAgents, and no LangChain hosted-model client in `src/agent/index.ts`. `runOpenWikiAgent()` unconditionally calls `runClaudeCliAgent()` (`src/agent/claude-cli/claude-cli-backend.ts`) for every command, which spawns the operator's already-authenticated `claude` CLI binary as a subprocess. It has its own prompt builder (`src/agent/claude-cli/prompt.ts`) and enforces the docs-only write restriction via a `PreToolUse` hook (`write-guard-hook.ts` / `write-guard.ts`) instead of a virtual-filesystem backend. It requires the `claude` CLI to be installed and authenticated in the run environment, and v1 scope supports only `repository` output mode. See [Agent workflow](../agent/workflow.md) for the full flow.
 
-- **vertex** → `ChatAnthropic` with a custom `createClient` returning an `AnthropicVertex` client (`@anthropic-ai/vertex-sdk`) configured from `GOOGLE_CLOUD_PROJECT` and `resolveProviderLocation()` (default `global`); auth is Google Application Default Credentials, no API key.
-- **anthropic** → `ChatAnthropic` with the Anthropic API key.
-- **openai-chatgpt** → `ChatOpenAI` with `useResponsesApi: true`, `zdrEnabled: true`, `streaming: true`, pointed at the Codex backend (`CODEX_RESPONSES_BASE_URL`) with account-id/originator/beta headers. Tokens are refreshed before model creation via `ensureFreshChatGptTokens()`.
-- **openrouter** → `ChatOpenRouter` with the selected model ID.
-- **openai** → `ChatOpenAI` with `useResponsesApi: true`.
-- **baseten / fireworks / nvidia / openai-compatible** → `ChatOpenAI` with the provider's API key and optional custom `baseURL` from `PROVIDER_CONFIGS`.
-- **claude-cli** → does not use `createModel`/DeepAgents at all. `src/agent/index.ts` branches to `runClaudeCliAgent()` (`src/agent/claude-cli/claude-cli-backend.ts`) before model creation, spawning the operator's already-authenticated `claude` CLI binary as a subprocess. It has its own prompt builder (`src/agent/claude-cli/prompt.ts`) and re-enforces the docs-only write restriction via a `PreToolUse` hook (`write-guard-hook.ts` / `write-guard.ts`) instead of `OpenWikiLocalShellBackend`, since this path bypasses DeepAgents entirely. It is keyless (no API key/OAuth) and deliberately excluded from `SELECTABLE_OPENWIKI_PROVIDERS` — opt-in only via `OPENWIKI_PROVIDER=claude-cli` — and v1 supports only `repository` output mode. See [Agent workflow](../agent/workflow.md) for the full flow.
+`getMissingProviderEnvKey()` in `src/constants.ts` still exists for credential gating, but for `claude-cli` it always returns `null` (no `apiKeyEnvKey`, no `projectEnvKey` configured) — there is nothing to gate.
 
-Credential gating before model creation uses `getMissingProviderEnvKey()` in `src/constants.ts`, which requires the provider's API key — or `GOOGLE_CLOUD_PROJECT` for vertex — and powers the same check in the CLI's non-interactive gates and the onboarding flow.
-
-### DeepAgents backend
-
-The agent uses a DeepAgents `LocalShellBackend` rooted at the repository, configured with `virtualMode: true`, `maxOutputBytes: 100_000`, and a 120 second timeout. A SQLite checkpointer (`~/.openwiki/openwiki.sqlite`) persists conversation threads keyed by a hash of the repository path.
+`src/env.ts` and the credential diagnostics panel still track env keys for the removed providers (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, Bedrock/Gemini/ChatGPT-OAuth keys, etc. — see [Credentials and updates](../operations/credentials-and-updates.md)); these are vestigial (no provider config reads them) but not removed, so setting them has no effect on which provider runs.
 
 ### Content snapshot and metadata writes
 
@@ -81,8 +69,8 @@ The current design reflects a documentation product rather than a general-purpos
 
 - The CLI owns user experience and credential bootstrap so the tool is install-and-run friendly.
 - Git evidence is collected in the host process before the agent starts so the model sees stable repository context.
-- Provider support is centralized in `src/constants.ts` so adding a provider is a single-config change plus a model-creation branch.
-- Model execution is provider-stable: transient request failures can retry through the selected LangChain model client, but OpenWiki surfaces the final error instead of continuing with another model.
+- Provider support is centralized in `src/constants.ts`, though currently narrowed to a single `claude-cli` provider — reintroducing a hosted-model provider means adding both a config entry and a new execution path (no `createModel` branch point exists to hook into anymore).
+- Model execution has no automatic retry path: the `claude-cli` backend spawns the CLI once per run and surfaces a failure immediately. `OPENWIKI_PROVIDER_RETRY_ATTEMPTS` is still validated in `src/env.ts` but is not consumed by any retry logic.
 - The content-snapshot check prevents metadata churn when an update run produces no documentation changes, which is important for scheduled CI workflows.
 - Auto-exit for init/update makes the CLI usable in both interactive and one-shot contexts without requiring `--print`.
 
@@ -90,8 +78,8 @@ The current design reflects a documentation product rather than a general-purpos
 
 - Add or refine CLI commands in `src/commands.ts` and the corresponding UI behavior in `src/cli.tsx`.
 - Change onboarding or local credential storage in `src/credentials.tsx` and `src/env.ts`.
-- Add a new model provider by extending `PROVIDER_CONFIGS` and `OpenWikiProvider` in `src/constants.ts`, then adding a branch in `createModel` in `src/agent/index.ts`.
-- Adjust model defaults, validation, or fallback lists in `src/constants.ts`.
+- Add a new model provider by extending `PROVIDER_CONFIGS` and `OpenWikiProvider` in `src/constants.ts`, then implementing a new execution path analogous to `src/agent/claude-cli/` (there is no `createModel` branch to extend anymore).
+- Adjust model defaults or validation in `src/constants.ts`.
 - Extend the documentation prompt or Git evidence in `src/agent/prompt.ts` and `src/agent/utils.ts`.
 - Modify run persistence or snapshot behavior in `src/agent/utils.ts`.
 
@@ -99,9 +87,9 @@ The current design reflects a documentation product rather than a general-purpos
 
 - `src/cli.tsx` and `src/commands.ts` must stay aligned; help text and parser behavior are intentionally coupled.
 - Credential setup writes to a real home-directory file, so permission handling matters.
-- The agent is expected to work from repository-local virtual paths like `/README.md` and `/openwiki/quickstart.md`; the prompt explicitly warns about this.
+- The `claude-cli` backend operates on real repository-relative filesystem paths (not a virtual filesystem) via the spawned CLI's own native Read/Write/Edit/Bash/Grep/Glob tools.
 - `openwiki/` in the target repository is both the docs output location and the metadata location for `.last-update.json`.
-- When adding a provider, update `managedEnvKeys` in `src/env.ts` so diagnostics and env formatting cover the new key.
+- When adding a provider, update `MANAGED_ENV_KEYS` in `src/env.ts` so diagnostics and env formatting cover the new key.
 - The content-snapshot logic excludes `.last-update.json`; if new metadata files are added under `openwiki/`, decide whether they should be excluded too.
 
 ## Source map
@@ -114,8 +102,6 @@ The current design reflects a documentation product rather than a general-purpos
 - `src/agent/prompt.ts`
 - `src/agent/utils.ts`
 - `src/agent/types.ts`
-- `src/agent/docs-only-backend.ts`
-- `src/agent/openai-chatgpt-oauth.ts`
 - `src/agent/claude-cli/claude-cli-backend.ts`
 - `src/agent/claude-cli/prompt.ts`
 - `src/agent/claude-cli/write-guard.ts`
