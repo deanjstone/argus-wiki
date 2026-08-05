@@ -76,7 +76,7 @@ The first interactive run can still prompt for:
 `PROVIDER_CONFIGS` in `src/constants.ts` has a single entry:
 
 | Provider   | Env key        | Base URL                    | Models                                                               |
-| ---------- | -------------- | ---------------------------- | --------------------------------------------------------------------- |
+| ---------- | -------------- | --------------------------- | -------------------------------------------------------------------- |
 | claude-cli | none (keyless) | none (subprocess, not HTTP) | none preset — `OPENWIKI_MODEL_ID` passes through to `claude --model` |
 
 `claude-cli` is both `DEFAULT_PROVIDER` and the only value `isValidProvider()` accepts, so `resolveConfiguredProvider()` resolves to it whether or not `OPENWIKI_PROVIDER` is set. The upstream fallback-through-API-keys logic (try OpenAI, then OpenRouter, then Anthropic, etc.) no longer exists — `resolveConfiguredProvider()` is now a one-line env-var-or-default lookup.
