@@ -26,6 +26,13 @@ describe("buildHookSettings", () => {
 
     expect(command).toContain("'/tmp/o'\\''brien'");
   });
+
+  test("omits CLAUDE_CLI_DENIED_DIRS when OPENWIKI_DENIED_PATHS is unset", () => {
+    const settings = buildHookSettings("/home/deanj/projects/argus-wiki");
+    expect(settings.hooks.PreToolUse[0].hooks[0].command).not.toContain(
+      "CLAUDE_CLI_DENIED_DIRS=",
+    );
+  });
 });
 
 describe("shellQuote", () => {

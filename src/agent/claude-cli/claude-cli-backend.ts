@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { OPEN_WIKI_DIR } from "../../constants.js";
+import { OPEN_WIKI_DENIED_DIRS, OPEN_WIKI_DIR } from "../../constants.js";
 import {
   createOpenWikiContentSnapshot,
   createRunContext,
@@ -123,6 +123,9 @@ export function buildHookSettings(repoRoot: string): {
   const hookCommand = [
     `CLAUDE_CLI_REPO_ROOT=${shellQuote(repoRoot)}`,
     `CLAUDE_CLI_ALLOWED_DIR=${shellQuote(OPEN_WIKI_DIR)}`,
+    ...(OPEN_WIKI_DENIED_DIRS.length > 0
+      ? [`CLAUDE_CLI_DENIED_DIRS=${shellQuote(OPEN_WIKI_DENIED_DIRS.join(","))}`]
+      : []),
     "node",
     shellQuote(WRITE_GUARD_HOOK_PATH),
   ].join(" ");

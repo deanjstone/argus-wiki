@@ -7,8 +7,9 @@ import { evaluateWritePath } from "./write-guard.js";
  * Wired via a generated `.claude/settings.json` with a "Write|Edit" matcher.
  * Reads the standard PreToolUse JSON payload from stdin and exits 2 (which
  * Claude Code treats as "deny, feed stderr back to the model") for any write
- * outside CLAUDE_CLI_ALLOWED_DIR. Any malformed input or missing config fails
- * closed (deny) rather than silently allowing the write through.
+ * outside CLAUDE_CLI_ALLOWED_DIR (or inside CLAUDE_CLI_DENIED_DIRS, when set —
+ * see write-guard.ts's deny-list mode). Any malformed input or missing config
+ * fails closed (deny) rather than silently allowing the write through.
  */
 
 interface PreToolUseHookInput {
@@ -40,6 +41,11 @@ async function main(): Promise<void> {
     );
   }
   const allowedRelativeDir = process.env.CLAUDE_CLI_ALLOWED_DIR ?? "openwiki";
+  const deniedRelativePaths = process.env.CLAUDE_CLI_DENIED_DIRS
+    ? process.env.CLAUDE_CLI_DENIED_DIRS.split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+    : undefined;
 
   const raw = await readStdin();
   let input: PreToolUseHookInput;
@@ -66,6 +72,7 @@ async function main(): Promise<void> {
   const decision = evaluateWritePath({
     repoRoot,
     allowedRelativeDir,
+    deniedRelativePaths,
     filePath,
     cwd: input.cwd,
   });

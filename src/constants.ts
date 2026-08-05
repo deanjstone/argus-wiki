@@ -1,6 +1,20 @@
 export const OPEN_WIKI_DIR = process.env.OPENWIKI_OUTPUT_DIR ?? "openwiki";
 export const UPDATE_METADATA_PATH = `${OPEN_WIKI_DIR}/.last-update.json`;
 
+/**
+ * Comma-separated paths (files or directories, relative to the repo root)
+ * the claude-cli write guard must refuse to touch. When set and non-empty,
+ * this switches the guard from its default single-allowed-directory mode
+ * (writes confined to OPEN_WIKI_DIR) to deny-list mode (writes allowed
+ * anywhere except these paths) — see write-guard.ts's deniedRelativePaths.
+ * Unset by default: existing per-repo docs-only runs are unaffected.
+ */
+export const OPEN_WIKI_DENIED_DIRS = process.env.OPENWIKI_DENIED_PATHS
+  ? process.env.OPENWIKI_DENIED_PATHS.split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+  : [];
+
 export const BASETEN_API_KEY_ENV_KEY = "BASETEN_API_KEY";
 export const FIREWORKS_API_KEY_ENV_KEY = "FIREWORKS_API_KEY";
 export const NEBIUS_API_KEY_ENV_KEY = "NEBIUS_API_KEY";
