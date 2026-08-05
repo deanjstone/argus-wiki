@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // a dynamic import rather than the static import the rest of
 // claude-cli-backend.test.ts uses.
 
-type BackendModule = typeof import("../src/agent/claude-cli/claude-cli-backend.ts");
+type BackendModule =
+  typeof import("../src/agent/claude-cli/claude-cli-backend.ts");
 
 const ENV_KEY = "OPENWIKI_DENIED_PATHS";
 let original: string | undefined;
@@ -29,12 +30,11 @@ describe("buildHookSettings with OPENWIKI_DENIED_PATHS set", () => {
   test("includes a joined CLAUDE_CLI_DENIED_DIRS env assignment in the hook command", async () => {
     vi.resetModules();
     process.env[ENV_KEY] = "02.MEMORY, MEMORY.md";
-    const { buildHookSettings }: BackendModule = await import(
-      "../src/agent/claude-cli/claude-cli-backend.ts"
-    );
+    const { buildHookSettings }: BackendModule =
+      await import("../src/agent/claude-cli/claude-cli-backend.ts");
 
-    const command = buildHookSettings("/home/deanj/CONTEXT").hooks
-      .PreToolUse[0].hooks[0].command;
+    const command = buildHookSettings("/home/deanj/CONTEXT").hooks.PreToolUse[0]
+      .hooks[0].command;
 
     expect(command).toContain("CLAUDE_CLI_DENIED_DIRS=");
     expect(command).toContain("02.MEMORY,MEMORY.md");

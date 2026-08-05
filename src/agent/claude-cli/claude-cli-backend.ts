@@ -124,7 +124,9 @@ export function buildHookSettings(repoRoot: string): {
     `CLAUDE_CLI_REPO_ROOT=${shellQuote(repoRoot)}`,
     `CLAUDE_CLI_ALLOWED_DIR=${shellQuote(OPEN_WIKI_DIR)}`,
     ...(OPEN_WIKI_DENIED_DIRS.length > 0
-      ? [`CLAUDE_CLI_DENIED_DIRS=${shellQuote(OPEN_WIKI_DENIED_DIRS.join(","))}`]
+      ? [
+          `CLAUDE_CLI_DENIED_DIRS=${shellQuote(OPEN_WIKI_DENIED_DIRS.join(","))}`,
+        ]
       : []),
     "node",
     shellQuote(WRITE_GUARD_HOOK_PATH),
