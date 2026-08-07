@@ -34,6 +34,8 @@ native dependency build begins.
 
 The `openwiki/` documentation output directory in the target repository is similarly overridable via `OPENWIKI_OUTPUT_DIR` (`OPEN_WIKI_DIR` in `src/constants.ts`, defaults to `openwiki`); this also moves where `.last-update.json` is read and written. Both overrides exist so this directory layout can be repointed at a different location without patching source, while defaulting to upstream's original paths when unset.
 
+The `claude-cli` write guard's default sandbox (writes confined to `OPEN_WIKI_DIR`) can be switched to a deny-list instead by setting `OPENWIKI_DENIED_PATHS` (`OPEN_WIKI_DENIED_DIRS` in `src/constants.ts`): a comma-separated list of repo-relative files/directories that become off-limits, with every other path in the repo allowed. Unset by default, so it has no effect on normal docs-only runs; see [Agent workflow: Claude Code CLI provider](../agent/workflow.md#claude-code-cli-provider) for how the write-guard hook applies it.
+
 The file stores provider configuration and API keys:
 
 - `OPENWIKI_PROVIDER` — the selected model provider (the `claude-cli` provider stores nothing here — it is keyless and reuses the operator's already-authenticated `claude` CLI; see [CLI usage: Claude Code CLI provider](../cli/usage.md#claude-code-cli-provider))
