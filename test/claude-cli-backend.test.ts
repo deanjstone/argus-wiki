@@ -7,16 +7,14 @@ import {
 
 describe("buildHookSettings", () => {
   test("wires a PreToolUse hook matching Write and Edit", () => {
-    const settings = buildHookSettings("/home/deanj/projects/argus-wiki");
+    const settings = buildHookSettings("/home/deanj/repos/argus-wiki");
     const [entry] = settings.hooks.PreToolUse;
 
     expect(entry.matcher).toBe("Write|Edit");
     expect(entry.hooks).toHaveLength(1);
     expect(entry.hooks[0].type).toBe("command");
     expect(entry.hooks[0].command).toContain("CLAUDE_CLI_REPO_ROOT=");
-    expect(entry.hooks[0].command).toContain(
-      "'/home/deanj/projects/argus-wiki'",
-    );
+    expect(entry.hooks[0].command).toContain("'/home/deanj/repos/argus-wiki'");
     expect(entry.hooks[0].command).toContain("write-guard-hook.js");
   });
 
@@ -28,7 +26,7 @@ describe("buildHookSettings", () => {
   });
 
   test("omits CLAUDE_CLI_DENIED_DIRS when OPENWIKI_DENIED_PATHS is unset", () => {
-    const settings = buildHookSettings("/home/deanj/projects/argus-wiki");
+    const settings = buildHookSettings("/home/deanj/repos/argus-wiki");
     expect(settings.hooks.PreToolUse[0].hooks[0].command).not.toContain(
       "CLAUDE_CLI_DENIED_DIRS=",
     );

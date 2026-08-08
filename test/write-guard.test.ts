@@ -2,13 +2,13 @@ import { describe, expect, test } from "vitest";
 import { evaluateWritePath } from "../src/agent/claude-cli/write-guard.ts";
 
 describe("evaluateWritePath", () => {
-  const repoRoot = "/home/deanj/projects/argus-wiki";
+  const repoRoot = "/home/deanj/repos/argus-wiki";
 
   test("allows writes inside the allowed directory", () => {
     const decision = evaluateWritePath({
       repoRoot,
       allowedRelativeDir: "openwiki",
-      filePath: "/home/deanj/projects/argus-wiki/openwiki/architecture.md",
+      filePath: "/home/deanj/repos/argus-wiki/openwiki/architecture.md",
     });
     expect(decision).toEqual({ allowed: true });
   });
@@ -17,7 +17,7 @@ describe("evaluateWritePath", () => {
     const decision = evaluateWritePath({
       repoRoot,
       allowedRelativeDir: "openwiki",
-      filePath: "/home/deanj/projects/argus-wiki/openwiki",
+      filePath: "/home/deanj/repos/argus-wiki/openwiki",
     });
     expect(decision.allowed).toBe(true);
   });
@@ -26,7 +26,7 @@ describe("evaluateWritePath", () => {
     const decision = evaluateWritePath({
       repoRoot,
       allowedRelativeDir: "openwiki",
-      filePath: "/home/deanj/projects/argus-wiki/AGENTS.md",
+      filePath: "/home/deanj/repos/argus-wiki/AGENTS.md",
     });
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toContain("Refused path: /home/deanj");
@@ -36,7 +36,7 @@ describe("evaluateWritePath", () => {
     const decision = evaluateWritePath({
       repoRoot,
       allowedRelativeDir: "openwiki",
-      filePath: "/home/deanj/projects/argus-wiki/openwiki-fake/notes.md",
+      filePath: "/home/deanj/repos/argus-wiki/openwiki-fake/notes.md",
     });
     expect(decision.allowed).toBe(false);
   });
@@ -55,7 +55,7 @@ describe("evaluateWritePath", () => {
     const decision = evaluateWritePath({
       repoRoot,
       allowedRelativeDir: "openwiki",
-      filePath: "/home/deanj/projects/argus-wiki/openwiki/../../../etc/passwd",
+      filePath: "/home/deanj/repos/argus-wiki/openwiki/../../../etc/passwd",
     });
     expect(decision.allowed).toBe(false);
   });
@@ -65,7 +65,7 @@ describe("evaluateWritePath", () => {
       repoRoot,
       allowedRelativeDir: "openwiki",
       filePath: "architecture.md",
-      cwd: "/home/deanj/projects/argus-wiki/openwiki",
+      cwd: "/home/deanj/repos/argus-wiki/openwiki",
     });
     expect(decision.allowed).toBe(true);
   });
