@@ -14,9 +14,7 @@ describe("buildHookSettings", () => {
     expect(entry.hooks).toHaveLength(1);
     expect(entry.hooks[0].type).toBe("command");
     expect(entry.hooks[0].command).toContain("CLAUDE_CLI_REPO_ROOT=");
-    expect(entry.hooks[0].command).toContain(
-      "'/home/deanj/repos/argus-wiki'",
-    );
+    expect(entry.hooks[0].command).toContain("'/home/deanj/repos/argus-wiki'");
     expect(entry.hooks[0].command).toContain("write-guard-hook.js");
   });
 
