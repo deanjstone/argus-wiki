@@ -1,5 +1,9 @@
 # argus-wiki
 
+## Status
+
+**ARCHIVED 2026-08-09.** This codebase was subtree-merged in full (with git history) into `deanjstone/argus-context` as `packages/wiki` on 2026-08-03, making this standalone repo redundant — it had been running a duplicate daily scheduled workflow alongside `argus-context`'s own on the same self-hosted runner. Superseded by `deanjstone/argus-context` (`packages/wiki`). See [deanjstone/argus-wiki#43](https://github.com/deanjstone/argus-wiki/issues/43) for the full decommission record.
+
 Light-touch fork of [langchain-ai/openwiki](https://github.com/langchain-ai/openwiki), retargeted at the CONTEXT/CORTEX Obsidian vaults instead of a fresh `~/.openwiki` tree.
 
 ## Remotes
